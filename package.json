@@ -1,0 +1,12 @@
+{
+  "name": "the-muse-salon-site",
+  "version": "1.0.0",
+  "private": true,
+  "description": "The Muse Salon website with Netlify Functions backend for booking availability and admin controls.",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^8.1.0"
+  }
+}

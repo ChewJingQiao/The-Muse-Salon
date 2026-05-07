@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1200">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0d0d0d"/>
+      <stop offset="1" stop-color="#b69a65"/>
+    </linearGradient>
+    <linearGradient id="hair" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#16100e"/>
+      <stop offset=".42" stop-color="#4c3024"/>
+      <stop offset=".55" stop-color="#caa461"/>
+      <stop offset="1" stop-color="#1b1210"/>
+    </linearGradient>
+  </defs>
+  <rect width="900" height="1200" fill="url(#bg)"/>
+  <path d="M273 1145c-2-170 9-333 34-489 32-203 87-335 166-396 83 64 137 197 163 397 20 153 16 315-10 488H273Z" fill="url(#hair)"/>
+  <path d="M458 306c12 238 8 517-11 837" fill="none" stroke="#f5e3bd" stroke-opacity=".5" stroke-width="14"/>
+  <rect x="54" y="54" width="792" height="1092" fill="none" stroke="#f6efe4" stroke-opacity=".25" stroke-width="2"/>
+  <text x="70" y="108" fill="#f6efe4" font-family="Arial, sans-serif" font-size="27" letter-spacing="4">REBONDING RESULT</text>
+</svg>

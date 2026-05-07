@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1200">
+  <defs>
+    <linearGradient id="bg" x1="1" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#131313"/>
+      <stop offset="1" stop-color="#ddd0bc"/>
+    </linearGradient>
+    <linearGradient id="hair" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1d1714"/>
+      <stop offset=".5" stop-color="#6e4630"/>
+      <stop offset="1" stop-color="#f2d28f"/>
+    </linearGradient>
+  </defs>
+  <rect width="900" height="1200" fill="url(#bg)"/>
+  <path d="M194 1160c29-252 81-492 156-720 36-110 91-182 164-216 92 54 151 138 179 254 52 217 7 439-92 682H194Z" fill="url(#hair)"/>
+  <path d="M285 1030c160-183 253-444 279-782" fill="none" stroke="#fff0c9" stroke-opacity=".42" stroke-width="20"/>
+  <path d="M397 1136c104-242 151-519 136-831" fill="none" stroke="#f6efe4" stroke-opacity=".2" stroke-width="42"/>
+  <rect x="54" y="54" width="792" height="1092" fill="none" stroke="#c9a45d" stroke-opacity=".36" stroke-width="2"/>
+  <text x="70" y="108" fill="#111" font-family="Arial, sans-serif" font-size="27" letter-spacing="4">GLOSS TREATMENT</text>
+</svg>

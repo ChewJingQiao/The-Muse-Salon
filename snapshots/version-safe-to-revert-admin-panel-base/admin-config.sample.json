@@ -1,0 +1,4 @@
+{
+  "admin_password": "change-this-password",
+  "session_secret": "replace-with-a-long-random-secret"
+}

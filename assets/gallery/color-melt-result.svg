@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1200">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#201b18"/>
+      <stop offset="1" stop-color="#8d6b3d"/>
+    </linearGradient>
+    <linearGradient id="hair" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e6c478"/>
+      <stop offset=".45" stop-color="#b06d45"/>
+      <stop offset="1" stop-color="#2b1a16"/>
+    </linearGradient>
+  </defs>
+  <rect width="900" height="1200" fill="url(#bg)"/>
+  <path d="M238 1150c-12-267 14-522 92-748 43-125 98-199 172-220 76 30 132 108 168 233 66 229 73 475 4 735H238Z" fill="url(#hair)"/>
+  <path d="M350 258c74 89 122 393 43 892" fill="none" stroke="#f4d18a" stroke-opacity=".45" stroke-width="18"/>
+  <path d="M520 245c-52 202-37 521 46 898" fill="none" stroke="#3f241b" stroke-opacity=".45" stroke-width="24"/>
+  <rect x="54" y="54" width="792" height="1092" fill="none" stroke="#f2e8d8" stroke-opacity=".28" stroke-width="2"/>
+  <text x="70" y="108" fill="#f6efe4" font-family="Arial, sans-serif" font-size="27" letter-spacing="4">COLORING RESULT</text>
+</svg>

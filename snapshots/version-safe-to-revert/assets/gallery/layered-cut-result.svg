@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1200">
+  <defs>
+    <linearGradient id="bg" x1="1" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#c8b08a"/>
+      <stop offset="1" stop-color="#161616"/>
+    </linearGradient>
+  </defs>
+  <rect width="900" height="1200" fill="url(#bg)"/>
+  <path d="M218 1136c26-228 72-429 138-604 43-115 97-194 164-238 63 44 112 119 146 225 61 190 57 395-11 617H218Z" fill="#2b1f1a"/>
+  <path d="M244 888c169-32 295-94 378-186" fill="none" stroke="#b98b55" stroke-width="47" stroke-linecap="round"/>
+  <path d="M282 1015c174-35 291-93 350-173" fill="none" stroke="#e0c07a" stroke-opacity=".75" stroke-width="30" stroke-linecap="round"/>
+  <path d="M342 614c71-46 156-70 254-72" fill="none" stroke="#f0dbb0" stroke-opacity=".32" stroke-width="22" stroke-linecap="round"/>
+  <rect x="54" y="54" width="792" height="1092" fill="none" stroke="#f6efe4" stroke-opacity=".24" stroke-width="2"/>
+  <text x="70" y="108" fill="#111" font-family="Arial, sans-serif" font-size="27" letter-spacing="4">LAYERED CUT</text>
+</svg>

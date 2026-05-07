@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1200">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f2eadf"/>
+      <stop offset="1" stop-color="#3b332d"/>
+    </linearGradient>
+  </defs>
+  <rect width="900" height="1200" fill="url(#bg)"/>
+  <g fill="none" stroke-linecap="round">
+    <path d="M244 1138c31-150 19-298-37-444-42-108-21-240 74-300 53-34 116-34 189 0 77 36 140 29 189-21 68 97 78 212 29 345-53 145-69 287-47 426" stroke="#2c211b" stroke-width="62"/>
+    <path d="M325 1140c47-170 42-330-14-480-33-89-10-159 70-210" stroke="#9c7148" stroke-width="36"/>
+    <path d="M522 1143c-43-179-20-331 70-456 44-61 40-122-11-184" stroke="#d3a765" stroke-width="35"/>
+    <path d="M405 1138c38-228 33-419-16-574" stroke="#f2d391" stroke-opacity=".65" stroke-width="19"/>
+  </g>
+  <rect x="54" y="54" width="792" height="1092" fill="none" stroke="#111" stroke-opacity=".18" stroke-width="2"/>
+  <text x="70" y="108" fill="#111" font-family="Arial, sans-serif" font-size="27" letter-spacing="4">SOFT PERM</text>
+</svg>

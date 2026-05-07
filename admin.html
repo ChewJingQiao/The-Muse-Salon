@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>The Muse Salon Admin | Availability Blocking</title>
+    <meta name="robots" content="noindex,nofollow">
+    <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;520;650;750;820&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/styles.css">
+  </head>
+  <body class="admin-page">
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div class="site-shell">
+      <header class="site-header">
+        <div class="container nav">
+          <a class="brand" href="index.html" aria-label="The Muse Salon home"><img src="assets/logo.svg" alt="The Muse Salon"></a>
+          <nav class="nav-links" aria-label="Primary navigation">
+            <a href="index.html">Website</a>
+            <a class="active" href="admin.html">Admin</a>
+          </nav>
+          <div class="nav-actions">
+            <button class="button outline" type="button" data-admin-logout hidden>Log Out</button>
+          </div>
+        </div>
+      </header>
+
+      <main id="main">
+        <section class="page-hero admin-hero">
+          <div class="container">
+            <p class="eyebrow">Private Admin</p>
+            <h1>Manage blocked booking times.</h1>
+            <p class="lead">Block dates or time ranges directly in this panel. The booking form will only show valid time slots to clients.</p>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="container admin-layout">
+            <aside class="contact-card admin-login-card" data-admin-login-card>
+              <p class="eyebrow">Sign In</p>
+              <h2>Availability admin</h2>
+              <p class="muted">This page is protected on the server. Change the default password in `admin-config.local.json` before real use.</p>
+              <form class="admin-login-form" data-admin-login-form>
+                <div class="field">
+                  <label for="admin-password">Password</label>
+                  <input id="admin-password" name="password" type="password" required>
+                </div>
+                <p class="admin-feedback" data-admin-login-feedback></p>
+                <button class="button dark" type="submit">Sign In</button>
+              </form>
+            </aside>
+
+            <section class="contact-card admin-dashboard" data-admin-dashboard hidden>
+              <div class="admin-panel-head">
+                <div>
+                  <p class="eyebrow">Direct Blocking</p>
+                  <h2>Availability controls</h2>
+                </div>
+                <button class="button outline-dark" type="button" data-admin-refresh>Refresh Data</button>
+              </div>
+
+              <div class="admin-warning" data-admin-warning hidden>
+                The admin password is still set to the default placeholder in `admin-config.local.json`.
+              </div>
+
+              <div class="admin-grid">
+                <div class="admin-card">
+                  <h3>Add or edit a block</h3>
+                  <form class="admin-block-form" data-admin-block-form>
+                    <input type="hidden" data-entry-row-index>
+                    <div class="field">
+                      <label for="block-date">Date</label>
+                      <input id="block-date" type="date" data-entry-date required>
+                    </div>
+                    <div class="field">
+                      <label for="block-status">Type</label>
+                      <select id="block-status" data-entry-status>
+                        <option value="blocked">Block time range</option>
+                        <option value="closed">Closed whole day</option>
+                      </select>
+                    </div>
+                    <div class="field">
+                      <label for="block-start">Start time</label>
+                      <input id="block-start" type="time" data-entry-start value="11:30">
+                    </div>
+                    <div class="field">
+                      <label for="block-end">End time</label>
+                      <input id="block-end" type="time" data-entry-end value="12:00">
+                    </div>
+                    <div class="field full">
+                      <label for="block-reason">Reason (optional)</label>
+                      <input id="block-reason" type="text" data-entry-reason placeholder="Lunch break, private booking, off-site event...">
+                    </div>
+                    <div class="admin-actions">
+                      <button class="button dark" type="submit" data-entry-save>Save Block</button>
+                      <button class="button outline-dark" type="button" data-entry-clear>Clear</button>
+                    </div>
+                  </form>
+                  <p class="admin-feedback" data-admin-save-feedback></p>
+                </div>
+
+                <div class="admin-card">
+                  <h3>Current opening hours</h3>
+                  <div class="admin-hours" data-admin-hours></div>
+                  <p class="muted">Choose “Closed whole day” to block all slots for a date.</p>
+                </div>
+              </div>
+
+              <div class="admin-card">
+                <h3>Current blocked entries</h3>
+                <div class="admin-table-wrap">
+                  <table class="admin-table">
+                    <thead>
+                      <tr><th>Date</th><th>Status</th><th>Start</th><th>End</th><th>Reason</th><th>Actions</th></tr>
+                    </thead>
+                    <tbody data-admin-table-body></tbody>
+                  </table>
+                </div>
+              </div>
+
+              <details class="admin-card admin-advanced">
+                <summary>Advanced: CSV import/export view</summary>
+                <p class="muted">This is optional. Daily operations should use the direct form above.</p>
+                <div class="field">
+                  <label for="csv-file">Upload CSV from Excel</label>
+                  <input id="csv-file" type="file" accept=".csv" data-admin-file>
+                </div>
+                <div class="field full">
+                  <label for="csv-editor">Current CSV</label>
+                  <textarea id="csv-editor" data-admin-csv-editor></textarea>
+                </div>
+                <button class="button outline-dark" type="button" data-admin-save-csv>Save CSV Text</button>
+              </details>
+            </section>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script src="assets/admin.js" defer></script>
+  </body>
+</html>

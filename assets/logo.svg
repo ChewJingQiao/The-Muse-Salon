@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">The Muse Salon logo</title>
+  <desc id="desc">Gold Muse Salon monogram and wordmark on a black background.</desc>
+  <rect width="512" height="512" fill="#000000"/>
+  <path d="M97 117v126h23V171l136 128 136-128v72h23V117L256 267 97 117Z" fill="#d7b45a"/>
+  <g fill="#d7b45a" font-family="Arial, Helvetica, sans-serif" text-anchor="middle">
+    <text x="256" y="384" font-size="25" letter-spacing="7">THEMUSESALON</text>
+  </g>
+</svg>

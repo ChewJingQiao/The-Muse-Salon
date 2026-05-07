@@ -1,0 +1,34 @@
+{
+  "timezone": "Asia/Kuala_Lumpur",
+  "slotDurationMinutes": 30,
+  "weeklyHours": {
+    "monday": {
+      "open": "11:30",
+      "close": "20:00"
+    },
+    "tuesday": {
+      "open": "11:30",
+      "close": "20:00"
+    },
+    "wednesday": {
+      "open": "11:30",
+      "close": "20:00"
+    },
+    "thursday": {
+      "open": "11:30",
+      "close": "20:00"
+    },
+    "friday": {
+      "open": "11:30",
+      "close": "20:00"
+    },
+    "saturday": {
+      "open": "11:30",
+      "close": "20:00"
+    },
+    "sunday": {
+      "open": "11:30",
+      "close": "18:00"
+    }
+  }
+}

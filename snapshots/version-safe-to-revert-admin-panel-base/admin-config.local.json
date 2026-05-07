@@ -1,0 +1,4 @@
+{
+  "admin_password": "adminthemuse",
+  "session_secret": "replace-with-a-long-random-secret"
+}
