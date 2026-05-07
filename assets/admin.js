@@ -60,18 +60,18 @@ function renderEntries(entries) {
   adminState.entries = entries;
 
   if (!entries.length) {
-    tableBody.innerHTML = '<tr><td colspan="6">No blocked dates or time ranges yet.</td></tr>';
+    tableBody.innerHTML = '<tr><td class="admin-empty-state" data-label="Status" colspan="6">No blocked dates or time ranges yet.</td></tr>';
     return;
   }
 
   tableBody.innerHTML = entries.map((entry) => `
     <tr>
-      <td>${entry.date}</td>
-      <td>${entry.status}</td>
-      <td>${entry.start_time || "-"}</td>
-      <td>${entry.end_time || "-"}</td>
-      <td>${entry.reason || "-"}</td>
-      <td>
+      <td data-label="Date">${entry.date}</td>
+      <td data-label="Status">${entry.status}</td>
+      <td data-label="Start">${entry.start_time || "-"}</td>
+      <td data-label="End">${entry.end_time || "-"}</td>
+      <td data-label="Reason">${entry.reason || "-"}</td>
+      <td data-label="Actions">
         <button class="button outline-dark admin-row-action" type="button" data-action="edit" data-row="${entry.row_index}">Edit</button>
         <button class="button outline-dark admin-row-action" type="button" data-action="delete" data-row="${entry.row_index}">Delete</button>
       </td>

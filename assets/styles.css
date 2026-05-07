@@ -661,7 +661,7 @@ p {
 
 .service-row {
   display: grid;
-  grid-template-columns: minmax(220px, .65fr) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(220px, .65fr) minmax(0, 1fr);
   gap: 28px;
   align-items: center;
   border-top: 1px solid var(--line);
@@ -676,6 +676,27 @@ p {
   margin: 12px 0 0;
   padding-left: 18px;
   color: var(--muted);
+}
+
+.service-cta-band {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-top: 20px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 30px 0;
+}
+
+.service-cta-band h3 {
+  max-width: 700px;
+  font-size: clamp(1.65rem, 2.8vw, 2.6rem);
+}
+
+.service-cta-band .section-actions {
+  margin-top: 0;
+  flex: 0 0 auto;
 }
 
 .team-grid {
@@ -1104,6 +1125,26 @@ p {
     display: none;
   }
 
+  .admin-page .admin-nav-links {
+    position: static;
+    display: flex;
+    width: auto;
+    padding: 0;
+    border-bottom: 0;
+    background: transparent;
+    transform: none;
+  }
+
+  .admin-page .admin-nav-links a {
+    padding: 10px 12px;
+    font-size: .92rem;
+  }
+
+  .admin-page .admin-nav-actions .button {
+    display: inline-flex;
+    width: auto;
+  }
+
   .nav-links .mobile-whatsapp {
     display: inline-flex;
     margin-top: 10px;
@@ -1173,6 +1214,15 @@ p {
     gap: 16px;
   }
 
+  .service-cta-band {
+    align-items: start;
+    flex-direction: column;
+  }
+
+  .service-cta-band .section-actions {
+    width: 100%;
+  }
+
   .lightbox-inner {
     grid-template-columns: 1fr;
     overflow: auto;
@@ -1201,6 +1251,110 @@ p {
   .section,
   .section.tight {
     padding: 62px 0;
+  }
+
+  .admin-page .nav {
+    min-height: 66px;
+    gap: 10px;
+  }
+
+  .admin-page .brand img {
+    width: 66px;
+  }
+
+  .admin-page .admin-nav-links {
+    gap: 2px;
+  }
+
+  .admin-page .admin-nav-links a {
+    padding: 8px 9px;
+    font-size: .82rem;
+  }
+
+  .admin-page .admin-nav-actions .button {
+    min-height: 38px;
+    padding: 8px 10px;
+    font-size: .8rem;
+  }
+
+  .admin-page .page-hero {
+    padding: 44px 0 38px;
+  }
+
+  .admin-page .page-hero h1 {
+    font-size: clamp(2.15rem, 13vw, 3.2rem);
+  }
+
+  .admin-login-card,
+  .admin-dashboard,
+  .admin-card,
+  .contact-card {
+    padding: 22px;
+  }
+
+  .admin-table-wrap {
+    overflow: visible;
+  }
+
+  .admin-table,
+  .admin-table thead,
+  .admin-table tbody,
+  .admin-table tr,
+  .admin-table th,
+  .admin-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .admin-table thead {
+    display: none;
+  }
+
+  .admin-table tr {
+    border: 1px solid var(--line);
+    background: rgba(255, 253, 248, .76);
+    margin-bottom: 12px;
+    padding: 10px 12px;
+  }
+
+  .admin-table td {
+    display: grid;
+    grid-template-columns: 84px minmax(0, 1fr);
+    gap: 10px;
+    border-bottom: 1px solid rgba(17, 17, 17, .08);
+    background: transparent;
+    padding: 9px 0;
+  }
+
+  .admin-table td:last-child {
+    border-bottom: 0;
+  }
+
+  .admin-table td.admin-empty-state {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-table td.admin-empty-state::before {
+    display: none;
+  }
+
+  .admin-table td::before {
+    content: attr(data-label);
+    color: var(--gold-deep);
+    font-size: .74rem;
+    font-weight: 800;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+
+  .admin-table td .admin-row-action {
+    width: calc(50% - 6px);
+    min-height: 40px;
+    margin: 0 6px 6px 0;
+  }
+
+  .admin-advanced summary {
+    font-size: 1.12rem;
   }
 
   h1 {

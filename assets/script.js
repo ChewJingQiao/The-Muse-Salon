@@ -138,7 +138,7 @@ if (appointmentForm) {
     const date = dateField.value;
     if (!date) {
       setTimeOptions([], "Select a date first", true);
-      availabilityFeedback.textContent = "Choose a date to load currently available time slots. Blocked or closed periods are hidden automatically.";
+      availabilityFeedback.textContent = "Choose a date to view available appointment times.";
       return;
     }
 
@@ -161,7 +161,7 @@ if (appointmentForm) {
 
       if (!payload.slots.length) {
         setTimeOptions([], "No slots available", true);
-        availabilityFeedback.textContent = "All time slots are blocked or fully reserved for this date.";
+      availabilityFeedback.textContent = "This date is fully booked. Please choose another preferred date.";
         return;
       }
 
