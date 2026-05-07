@@ -219,8 +219,25 @@ function getRoute(event) {
 const S_SETTINGS_KEY = SETTINGS_KEY; // keep constants grouped
 const S_ENTRIES_KEY = ENTRIES_KEY;
 
+function openStore() {
+  try {
+    return getStore(STORE_NAME);
+  } catch (error) {
+    const siteID = process.env.BLOBS_SITE_ID || process.env.NETLIFY_SITE_ID;
+    const token = process.env.BLOBS_TOKEN || process.env.NETLIFY_AUTH_TOKEN;
+
+    if (siteID && token) {
+      return getStore(STORE_NAME, { siteID, token });
+    }
+
+    throw new Error(
+      "Netlify Blobs is not configured in this runtime. Set BLOBS_SITE_ID and BLOBS_TOKEN in Netlify environment variables."
+    );
+  }
+}
+
 async function getSettingsAndEntries() {
-  const store = getStore(STORE_NAME);
+  const store = openStore();
   const settings = await store.get(S_SETTINGS_KEY, { type: "json" });
   const entries = await store.get(S_ENTRIES_KEY, { type: "json" });
 
