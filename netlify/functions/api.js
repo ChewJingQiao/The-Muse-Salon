@@ -221,6 +221,17 @@ const S_SETTINGS_KEY = SETTINGS_KEY; // keep constants grouped
 const S_ENTRIES_KEY = ENTRIES_KEY;
 
 function openStore() {
+  const siteID = process.env.BLOBS_SITE_ID || process.env.NETLIFY_SITE_ID;
+  const token =
+    process.env.BLOBS_TOKEN ||
+    process.env.NETLIFY_AUTH_TOKEN ||
+    process.env.NETLIFY_ACCESS_TOKEN ||
+    process.env.NETLIFY_TOKEN;
+
+  if (siteID && token) {
+    return getStore(STORE_NAME, { siteID, token });
+  }
+
   return getStore(STORE_NAME);
 }
 
@@ -247,12 +258,11 @@ function isMissingBlobsError(error) {
 }
 
 async function getSettingsAndEntries() {
-  let store;
+  let store = openStore();
   let settings;
   let entries;
 
   try {
-    store = openStore();
     settings = await store.get(S_SETTINGS_KEY, { type: "json" });
     entries = await store.get(S_ENTRIES_KEY, { type: "json" });
   } catch (error) {
