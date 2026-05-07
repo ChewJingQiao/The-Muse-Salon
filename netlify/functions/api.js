@@ -247,11 +247,12 @@ function isMissingBlobsError(error) {
 }
 
 async function getSettingsAndEntries() {
-  let store = openStore();
+  let store;
   let settings;
   let entries;
 
   try {
+    store = openStore();
     settings = await store.get(S_SETTINGS_KEY, { type: "json" });
     entries = await store.get(S_ENTRIES_KEY, { type: "json" });
   } catch (error) {
