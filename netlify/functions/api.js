@@ -4,6 +4,7 @@ const { getStore } = require("@netlify/blobs");
 const SESSION_COOKIE = "muse_admin_session";
 const SESSION_MAX_AGE_SECONDS = 8 * 60 * 60;
 const STORE_NAME = "muse-booking";
+const FUNCTION_VERSION = "2026-05-08-blobs-fallback-v2";
 const ENTRIES_KEY = "availability-entries";
 const SETTINGS_KEY = "booking-settings";
 const DAY_ORDER = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
@@ -278,6 +279,25 @@ exports.handler = async function handler(event) {
     const method = (event.httpMethod || "GET").toUpperCase();
     const route = getRoute(event);
     const { store, settings, entries } = await getSettingsAndEntries();
+
+    if (method === "GET" && route === "health") {
+      return jsonResponse(200, {
+        ok: true,
+        version: FUNCTION_VERSION,
+        route,
+        env: {
+          has_admin_password: Boolean(process.env.ADMIN_PASSWORD),
+          has_session_secret: Boolean(process.env.SESSION_SECRET),
+          has_blobs_site_id: Boolean(process.env.BLOBS_SITE_ID || process.env.NETLIFY_SITE_ID),
+          has_blobs_token: Boolean(
+            process.env.BLOBS_TOKEN ||
+              process.env.NETLIFY_AUTH_TOKEN ||
+              process.env.NETLIFY_ACCESS_TOKEN ||
+              process.env.NETLIFY_TOKEN
+          )
+        }
+      });
+    }
 
     if (method === "GET" && route === "availability") {
       const date = event.queryStringParameters && event.queryStringParameters.date;
