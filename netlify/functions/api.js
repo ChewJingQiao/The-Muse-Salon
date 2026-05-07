@@ -278,7 +278,6 @@ exports.handler = async function handler(event) {
   try {
     const method = (event.httpMethod || "GET").toUpperCase();
     const route = getRoute(event);
-    const { store, settings, entries } = await getSettingsAndEntries();
 
     if (method === "GET" && route === "health") {
       return jsonResponse(200, {
@@ -298,6 +297,8 @@ exports.handler = async function handler(event) {
         }
       });
     }
+
+    const { store, settings, entries } = await getSettingsAndEntries();
 
     if (method === "GET" && route === "availability") {
       const date = event.queryStringParameters && event.queryStringParameters.date;
