@@ -220,26 +220,45 @@ const S_SETTINGS_KEY = SETTINGS_KEY; // keep constants grouped
 const S_ENTRIES_KEY = ENTRIES_KEY;
 
 function openStore() {
-  try {
-    return getStore(STORE_NAME);
-  } catch (error) {
-    const siteID = process.env.BLOBS_SITE_ID || process.env.NETLIFY_SITE_ID;
-    const token = process.env.BLOBS_TOKEN || process.env.NETLIFY_AUTH_TOKEN;
+  return getStore(STORE_NAME);
+}
 
-    if (siteID && token) {
-      return getStore(STORE_NAME, { siteID, token });
-    }
+function openStoreWithManualCredentials() {
+  const siteID = process.env.BLOBS_SITE_ID || process.env.NETLIFY_SITE_ID;
+  const token =
+    process.env.BLOBS_TOKEN ||
+    process.env.NETLIFY_AUTH_TOKEN ||
+    process.env.NETLIFY_ACCESS_TOKEN ||
+    process.env.NETLIFY_TOKEN;
 
+  if (!siteID || !token) {
     throw new Error(
-      "Netlify Blobs is not configured in this runtime. Set BLOBS_SITE_ID and BLOBS_TOKEN in Netlify environment variables."
+      "Netlify Blobs is missing runtime context and manual credentials. Set BLOBS_SITE_ID and BLOBS_TOKEN in Netlify environment variables."
     );
   }
+
+  return getStore(STORE_NAME, { siteID, token });
+}
+
+function isMissingBlobsError(error) {
+  const text = String(error && (error.message || error)).toLowerCase();
+  return text.includes("blobsenvironment") || text.includes("siteid, token");
 }
 
 async function getSettingsAndEntries() {
-  const store = openStore();
-  const settings = await store.get(S_SETTINGS_KEY, { type: "json" });
-  const entries = await store.get(S_ENTRIES_KEY, { type: "json" });
+  let store = openStore();
+  let settings;
+  let entries;
+
+  try {
+    settings = await store.get(S_SETTINGS_KEY, { type: "json" });
+    entries = await store.get(S_ENTRIES_KEY, { type: "json" });
+  } catch (error) {
+    if (!isMissingBlobsError(error)) throw error;
+    store = openStoreWithManualCredentials();
+    settings = await store.get(S_SETTINGS_KEY, { type: "json" });
+    entries = await store.get(S_ENTRIES_KEY, { type: "json" });
+  }
 
   const finalSettings = settings || DEFAULT_SETTINGS;
   const finalEntries = Array.isArray(entries) ? entries : DEFAULT_ENTRIES;
