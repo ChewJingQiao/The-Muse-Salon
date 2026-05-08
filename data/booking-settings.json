@@ -1,6 +1,46 @@
 {
   "timezone": "Asia/Kuala_Lumpur",
   "slotDurationMinutes": 30,
+  "holdMinutes": 10,
+  "services": [
+    "Haircut & Styling",
+    "Hair Coloring",
+    "Hair Treatment",
+    "Rebonding / Smoothing",
+    "Perm",
+    "Scalp Care",
+    "Wash & Blow"
+  ],
+  "stylists": [
+    {
+      "name": "Aria Lim",
+      "level": "Director"
+    },
+    {
+      "name": "Elena Choo",
+      "level": "Director"
+    },
+    {
+      "name": "Mika Tan",
+      "level": "Senior Stylist"
+    },
+    {
+      "name": "Rina Wong",
+      "level": "Senior Stylist"
+    },
+    {
+      "name": "Celia Ng",
+      "level": "Senior Stylist"
+    },
+    {
+      "name": "Nova Lee",
+      "level": "Junior Stylist"
+    },
+    {
+      "name": "Ivy Teo",
+      "level": "Junior Stylist"
+    }
+  ],
   "weeklyHours": {
     "monday": {
       "open": "11:30",

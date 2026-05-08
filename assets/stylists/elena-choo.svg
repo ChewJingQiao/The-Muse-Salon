@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 800" role="img" aria-labelledby="title desc">
+  <title id="title">Elena Choo portrait illustration</title>
+  <desc id="desc">Editorial portrait illustration for a salon director.</desc>
+  <rect width="640" height="800" fill="#171411"/>
+  <path d="M116 160c76-92 236-111 333-42 105 75 127 245 75 379-42 108-124 170-218 171-104 1-189-64-225-174-39-120-30-248 35-334Z" fill="#2a231f"/>
+  <path d="M190 222c38-72 132-98 204-55 62 37 91 109 74 184-19 84-81 144-156 144-82 0-145-68-151-158-3-43 7-82 29-115Z" fill="#d0a170"/>
+  <path d="M153 278c24-116 111-183 219-171 84 9 143 66 166 154-76-2-152-29-229-82-33 48-85 81-156 99Z" fill="#3c2a24"/>
+  <path d="M118 616c45-86 115-130 207-130 91 0 162 44 207 130v184H118V616Z" fill="#eadfce"/>
+  <path d="M214 614c31 36 67 54 108 54 43 0 80-18 111-54" fill="none" stroke="#a98546" stroke-width="12" stroke-linecap="round"/>
+</svg>

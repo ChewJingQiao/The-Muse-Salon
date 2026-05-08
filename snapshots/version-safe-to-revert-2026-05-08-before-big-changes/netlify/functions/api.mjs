@@ -1,43 +1,17 @@
 import crypto from "node:crypto";
 import { getStore } from "@netlify/blobs";
 
-const SESSION_COOKIE = "kya_admin_session";
+const SESSION_COOKIE = "muse_admin_session";
 const SESSION_MAX_AGE_SECONDS = 8 * 60 * 60;
-const STORE_NAME = "kya-booking";
-const FUNCTION_VERSION = "2026-05-08-kya-booking-mvp-v1";
+const STORE_NAME = "muse-booking";
+const FUNCTION_VERSION = "2026-05-08-netlify-fn-v2";
 const ENTRIES_KEY = "availability-entries";
 const SETTINGS_KEY = "booking-settings";
-const BOOKINGS_KEY = "bookings";
-const ANY_STYLIST = "Any available stylist";
-const HOLD_MINUTES = 10;
 const DAY_ORDER = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
-
-const DEFAULT_SERVICES = [
-  "Haircut & Styling",
-  "Hair Coloring",
-  "Hair Treatment",
-  "Rebonding / Smoothing",
-  "Perm",
-  "Scalp Care",
-  "Wash & Blow"
-];
-
-const DEFAULT_STYLISTS = [
-  { name: "Aria Lim", level: "Director" },
-  { name: "Elena Choo", level: "Director" },
-  { name: "Mika Tan", level: "Senior Stylist" },
-  { name: "Rina Wong", level: "Senior Stylist" },
-  { name: "Celia Ng", level: "Senior Stylist" },
-  { name: "Nova Lee", level: "Junior Stylist" },
-  { name: "Ivy Teo", level: "Junior Stylist" }
-];
 
 const DEFAULT_SETTINGS = {
   timezone: "Asia/Kuala_Lumpur",
   slotDurationMinutes: 30,
-  holdMinutes: HOLD_MINUTES,
-  services: DEFAULT_SERVICES,
-  stylists: DEFAULT_STYLISTS,
   weeklyHours: {
     monday: { open: "11:30", close: "20:00" },
     tuesday: { open: "11:30", close: "20:00" },
@@ -49,7 +23,11 @@ const DEFAULT_SETTINGS = {
   }
 };
 
-const DEFAULT_ENTRIES = [];
+const DEFAULT_ENTRIES = [
+  { date: "2026-05-20", status: "closed", start_time: "", end_time: "", reason: "Salon closed for training" },
+  { date: "2026-05-12", status: "blocked", start_time: "13:00", end_time: "14:30", reason: "Lunch / private appointment" },
+  { date: "2026-05-17", status: "blocked", start_time: "16:00", end_time: "17:00", reason: "Staff unavailable" }
+];
 
 const jsonResponse = (status, payload, headers = {}) =>
   new Response(JSON.stringify(payload), {
@@ -73,16 +51,6 @@ function parseCookies(cookieHeader = "") {
 
 function getSessionSecret() {
   return process.env.SESSION_SECRET || "change-me-in-netlify-env";
-}
-
-function getAdminConfigProblem() {
-  if (!process.env.ADMIN_PASSWORD || process.env.ADMIN_PASSWORD === "change-this-password") {
-    return "ADMIN_PASSWORD is not configured.";
-  }
-  if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET === "change-me-in-netlify-env") {
-    return "SESSION_SECRET is not configured.";
-  }
-  return "";
 }
 
 function sign(data) {
@@ -133,28 +101,6 @@ function labelTime(value) {
   const suffix = h >= 12 ? "PM" : "AM";
   const hr = h % 12 || 12;
   return `${hr}:${String(m).padStart(2, "0")} ${suffix}`;
-}
-
-function isoNow() {
-  return new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
-}
-
-function addMinutes(date, minutes) {
-  return new Date(date.getTime() + minutes * 60 * 1000);
-}
-
-function normalizeSettings(settings = {}) {
-  return {
-    ...DEFAULT_SETTINGS,
-    ...settings,
-    services: settings.services?.length ? settings.services : DEFAULT_SERVICES,
-    stylists: settings.stylists?.length ? settings.stylists : DEFAULT_STYLISTS,
-    holdMinutes: Number(settings.holdMinutes || HOLD_MINUTES),
-    weeklyHours: {
-      ...DEFAULT_SETTINGS.weeklyHours,
-      ...(settings.weeklyHours || {})
-    }
-  };
 }
 
 function normalizeEntry(raw) {
@@ -208,62 +154,16 @@ function parseCsvText(csvText) {
   return entries;
 }
 
-function activeBookingBlocksSlot(booking) {
-  if (booking.status === "confirmed") return true;
-  if (booking.status !== "pending") return false;
-  return new Date(booking.expiresAt).getTime() > Date.now();
-}
-
-function expireStaleBookings(bookings) {
-  let changed = false;
-  for (const booking of bookings) {
-    if (booking.status === "pending" && new Date(booking.expiresAt).getTime() <= Date.now()) {
-      booking.status = "expired";
-      changed = true;
-    }
-  }
-  return changed;
-}
-
-function stylistsConflict(left, right) {
-  return left === right || left === ANY_STYLIST || right === ANY_STYLIST;
-}
-
-function bookingBlocksSlot(booking, date, time, stylist, excludeBookingId = "") {
-  const id = booking.bookingId || booking.id;
-  return (
-    id !== excludeBookingId &&
-    booking.date === date &&
-    booking.time === time &&
-    stylistsConflict(booking.stylist || ANY_STYLIST, stylist || ANY_STYLIST) &&
-    activeBookingBlocksSlot(booking)
-  );
-}
-
-function bookingForAdmin(booking) {
-  return {
-    ...booking,
-    holdActive: booking.status === "pending" && activeBookingBlocksSlot(booking),
-    blocksSlot: booking.status === "confirmed"
-  };
-}
-
-function sortBookings(bookings) {
-  return [...bookings].sort((a, b) =>
-    `${a.date || ""}${a.time || ""}${a.createdAt || ""}`.localeCompare(`${b.date || ""}${b.time || ""}${b.createdAt || ""}`)
-  );
-}
-
-function buildSlots(date, settings, entries, bookings, stylist = ANY_STYLIST, excludeBookingId = "") {
+function buildSlots(date, settings, entries) {
   const d = new Date(`${date}T00:00:00`);
   if (Number.isNaN(d.getTime())) throw new Error("Invalid date format.");
   const weekday = DAY_ORDER[(d.getDay() + 6) % 7];
   const hours = settings.weeklyHours[weekday];
-  if (!hours) return { date, stylist, closed: true, reason: "No business hours configured for this day.", slots: [] };
+  if (!hours) return { date, closed: true, reason: "No business hours configured for this day.", slots: [] };
 
   const sameDate = entries.filter((item) => item.date === date);
   const closed = sameDate.find((item) => item.status === "closed");
-  if (closed) return { date, stylist, closed: true, reason: closed.reason || "Unavailable on this date.", slots: [] };
+  if (closed) return { date, closed: true, reason: closed.reason || "Unavailable on this date.", slots: [] };
 
   const open = parseTime(hours.open);
   const close = parseTime(hours.close);
@@ -279,42 +179,9 @@ function buildSlots(date, settings, entries, bookings, stylist = ANY_STYLIST, ex
     const hh = Math.floor(cursor / 60);
     const mm = cursor % 60;
     const value = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
-    const booked = bookings.some((booking) => bookingBlocksSlot(booking, date, value, stylist, excludeBookingId));
-    if (!booked) slots.push({ value, label: labelTime(value) });
+    slots.push({ value, label: labelTime(value) });
   }
-  return { date, stylist, closed: false, reason: "", slots };
-}
-
-function validateBookingBody(body, settings) {
-  const service = String(body.service || "").trim();
-  const stylist = String(body.stylist || "").trim() || ANY_STYLIST;
-  const date = String(body.date || "").trim();
-  const time = String(body.time || "").trim();
-  const name = String(body.name || "").trim();
-  const phone = String(body.phone || "").trim();
-  const remarks = String(body.remarks || body.message || "").trim().slice(0, 500);
-
-  if (!service || !stylist || !date || !time || !name || !phone) {
-    throw new Error("Missing required fields.");
-  }
-  if (!settings.services.includes(service)) throw new Error("Please choose a valid service.");
-  const stylistNames = new Set([ANY_STYLIST, ...settings.stylists.map((item) => item.name)]);
-  if (!stylistNames.has(stylist)) throw new Error("Please choose a valid stylist.");
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Date must be in YYYY-MM-DD format.");
-  parseTime(time);
-  const phoneDigits = phone.replace(/\D/g, "");
-  if (phoneDigits.length < 8 || phoneDigits.length > 15) throw new Error("Please enter a valid phone number.");
-  return { service, stylist, date, time, name, phone, remarks };
-}
-
-function generateBookingId(bookings) {
-  const existing = new Set(bookings.map((booking) => booking.bookingId || booking.id));
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let id = "";
-  do {
-    id = `KYA-${Array.from({ length: 4 }, () => alphabet[crypto.randomInt(alphabet.length)]).join("")}`;
-  } while (existing.has(id));
-  return id;
+  return { date, closed: false, reason: "", slots };
 }
 
 function openStore() {
@@ -328,24 +195,19 @@ function openStore() {
   return getStore(STORE_NAME);
 }
 
-async function getStoreData() {
+async function getSettingsAndEntries() {
   const store = openStore();
-  let settings = normalizeSettings(await store.get(SETTINGS_KEY, { type: "json" }));
+  let settings = await store.get(SETTINGS_KEY, { type: "json" });
   let entries = await store.get(ENTRIES_KEY, { type: "json" });
-  let bookings = await store.get(BOOKINGS_KEY, { type: "json" });
-
+  if (!settings) {
+    settings = DEFAULT_SETTINGS;
+    await store.setJSON(SETTINGS_KEY, settings);
+  }
   if (!entries) {
     entries = DEFAULT_ENTRIES;
     await store.setJSON(ENTRIES_KEY, entries);
   }
-  if (!bookings) {
-    bookings = [];
-    await store.setJSON(BOOKINGS_KEY, bookings);
-  }
-  await store.setJSON(SETTINGS_KEY, settings);
-  if (expireStaleBookings(bookings)) await store.setJSON(BOOKINGS_KEY, bookings);
-
-  return { store, settings, entries, bookings };
+  return { store, settings, entries };
 }
 
 function routeFromContext(context, req) {
@@ -384,70 +246,28 @@ export default async (req, context) => {
       });
     }
 
+    const { store, settings, entries } = await getSettingsAndEntries();
+
+    if (method === "GET" && route === "availability") {
+      const date = url.searchParams.get("date");
+      if (!date) return jsonResponse(400, { error: "date is required" });
+      return jsonResponse(200, buildSlots(date, settings, entries));
+    }
+
     if (method === "GET" && route === "admin/status") {
       return jsonResponse(200, { authenticated: isAuthenticated(req) });
     }
 
     if (method === "POST" && route === "admin/login") {
-      const configProblem = getAdminConfigProblem();
-      if (configProblem) return jsonResponse(503, { error: configProblem });
-
       const body = await req.json();
       const password = String(body.password || "");
-      const configured = process.env.ADMIN_PASSWORD;
+      const configured = process.env.ADMIN_PASSWORD || "change-this-password";
       if (!safeCompare(password, configured)) return jsonResponse(401, { error: "Invalid password" });
       return jsonResponse(200, { authenticated: true }, { "Set-Cookie": issueSessionCookie() });
     }
 
     if (method === "POST" && route === "admin/logout") {
       return jsonResponse(200, { ok: true }, { "Set-Cookie": clearSessionCookie() });
-    }
-
-    const { store, settings, entries, bookings } = await getStoreData();
-
-    if (method === "GET" && route === "availability") {
-      const date = url.searchParams.get("date");
-      const stylist = url.searchParams.get("stylist") || ANY_STYLIST;
-      if (!date) return jsonResponse(400, { error: "date is required" });
-      return jsonResponse(200, buildSlots(date, settings, entries, bookings, stylist));
-    }
-
-    if (method === "POST" && route === "bookings") {
-      let payload;
-      try {
-        payload = validateBookingBody(await req.json(), settings);
-      } catch (error) {
-        return jsonResponse(400, { error: error.message, code: "invalid_booking" });
-      }
-
-      const availability = buildSlots(payload.date, settings, entries, bookings, payload.stylist);
-      const slotAvailable = availability.slots.some((slot) => slot.value === payload.time);
-      const alreadyHeld = bookings.some((booking) =>
-        bookingBlocksSlot(booking, payload.date, payload.time, payload.stylist)
-      );
-      if (!slotAvailable || alreadyHeld) {
-        return jsonResponse(409, {
-          error: "Slot already taken or no longer available. Please choose another time.",
-          code: "slot_unavailable"
-        });
-      }
-
-      const now = new Date();
-      const holdMinutes = Number(settings.holdMinutes || HOLD_MINUTES);
-      const bookingId = generateBookingId(bookings);
-      const booking = {
-        id: bookingId,
-        bookingId,
-        ...payload,
-        status: "pending",
-        createdAt: now.toISOString().replace(/\.\d{3}Z$/, "Z"),
-        expiresAt: addMinutes(now, holdMinutes).toISOString().replace(/\.\d{3}Z$/, "Z"),
-        confirmedAt: null,
-        cancelledAt: null
-      };
-      bookings.push(booking);
-      await store.setJSON(BOOKINGS_KEY, bookings);
-      return jsonResponse(201, { ok: true, booking, holdMinutes });
     }
 
     if (route.startsWith("admin/") && !isAuthenticated(req)) {
@@ -458,56 +278,9 @@ export default async (req, context) => {
       return jsonResponse(200, {
         csv_text: entriesToCsv(entries),
         entries: entries.map((entry, row_index) => ({ ...entry, row_index })),
-        bookings: sortBookings(bookings).map(bookingForAdmin),
         settings,
-        config_warning: Boolean(getAdminConfigProblem())
+        config_warning: !process.env.ADMIN_PASSWORD || process.env.ADMIN_PASSWORD === "change-this-password"
       });
-    }
-
-    if (method === "POST" && route === "admin/update-booking-status") {
-      const body = await req.json();
-      const bookingId = String(body.bookingId || body.id || "").trim();
-      const nextStatus = String(body.status || "").trim().toLowerCase();
-      if (!["confirmed", "cancelled", "expired"].includes(nextStatus)) {
-        return jsonResponse(400, { error: "Status must be confirmed, cancelled or expired." });
-      }
-
-      const booking = bookings.find((item) => (item.bookingId || item.id) === bookingId);
-      if (!booking) return jsonResponse(404, { error: "Booking not found." });
-
-      if (nextStatus === "confirmed") {
-        if (booking.status === "expired") {
-          return jsonResponse(409, {
-            error: "This pending hold has expired. Ask the client to submit a new booking.",
-            code: "pending_expired"
-          });
-        }
-        if (!["pending", "confirmed"].includes(booking.status)) {
-          return jsonResponse(409, { error: "Only pending bookings can be confirmed." });
-        }
-        const availability = buildSlots(
-          booking.date,
-          settings,
-          entries,
-          bookings,
-          booking.stylist || ANY_STYLIST,
-          bookingId
-        );
-        if (!availability.slots.some((slot) => slot.value === booking.time)) {
-          return jsonResponse(409, { error: "This slot is no longer available.", code: "slot_unavailable" });
-        }
-        booking.status = "confirmed";
-        booking.confirmedAt = isoNow();
-        booking.cancelledAt = null;
-      } else if (nextStatus === "cancelled") {
-        booking.status = "cancelled";
-        booking.cancelledAt = isoNow();
-      } else {
-        booking.status = "expired";
-      }
-
-      await store.setJSON(BOOKINGS_KEY, bookings);
-      return jsonResponse(200, { ok: true, booking: bookingForAdmin(booking) });
     }
 
     if (method === "POST" && route === "admin/upload-csv") {

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 800" role="img" aria-labelledby="title desc">
+  <title id="title">Mika Tan portrait illustration</title>
+  <desc id="desc">Editorial portrait illustration for a senior stylist.</desc>
+  <rect width="640" height="800" fill="#171411"/>
+  <path d="M132 145c65-75 217-95 314-34 111 70 137 234 83 377-45 119-130 181-230 180-109-2-192-75-224-190-35-126-15-257 57-333Z" fill="#2b221d"/>
+  <path d="M197 213c43-72 142-92 211-42 57 42 79 121 55 193-27 82-92 136-165 128-80-8-135-78-134-171 0-40 11-76 33-108Z" fill="#d1a56f"/>
+  <path d="M150 270c28-125 131-198 251-167 73 19 119 75 137 155-88 3-170-27-246-88-30 54-78 93-142 117v-17Z" fill="#3d2b26"/>
+  <path d="M115 616c44-84 114-128 204-128 88 0 158 44 205 128v184H115V616Z" fill="#e6dac9"/>
+  <path d="M210 602c33 42 70 63 111 63 43 0 81-21 114-63" fill="none" stroke="#9b7a3e" stroke-width="12" stroke-linecap="round"/>
+  <circle cx="435" cy="308" r="10" fill="#d7b45a"/>
+</svg>

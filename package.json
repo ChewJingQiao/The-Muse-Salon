@@ -1,8 +1,8 @@
 {
-  "name": "the-muse-salon-site",
+  "name": "the-kya-hair-salon-site",
   "version": "1.0.0",
   "private": true,
-  "description": "The Muse Salon website with Netlify Functions backend for booking availability and admin controls.",
+  "description": "The KYA Hair Salon website with Netlify Functions backend for booking availability and admin controls.",
   "engines": {
     "node": ">=18"
   },

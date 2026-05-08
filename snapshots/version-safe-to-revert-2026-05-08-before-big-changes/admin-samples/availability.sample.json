@@ -1,0 +1,31 @@
+{
+  "timezone": "Asia/Kuala_Lumpur",
+  "slotDurationMinutes": 30,
+  "weeklyHours": {
+    "monday": ["11:30", "20:00"],
+    "tuesday": ["11:30", "20:00"],
+    "wednesday": ["11:30", "20:00"],
+    "thursday": ["11:30", "20:00"],
+    "friday": ["11:30", "20:00"],
+    "saturday": ["11:30", "20:00"],
+    "sunday": ["11:30", "18:00"]
+  },
+  "blockedDates": [
+    {
+      "date": "2026-05-20",
+      "reason": "Salon closed for training"
+    }
+  ],
+  "blockedSlots": [
+    {
+      "date": "2026-05-12",
+      "times": ["13:00", "13:30", "14:00"],
+      "reason": "Lunch / private appointment"
+    },
+    {
+      "date": "2026-05-17",
+      "times": ["16:00", "16:30"],
+      "reason": "Staff unavailable"
+    }
+  ]
+}

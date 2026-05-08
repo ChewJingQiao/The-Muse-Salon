@@ -1,6 +1,6 @@
 const siteConfig = {
-  whatsappNumber: "60133646787",
-  whatsappMessage: "Hi The Muse Salon, I would like to book an appointment."
+  whatsappNumber: "60194191954",
+  whatsappMessage: "Hi The KYA Hair Salon, I would like to book an appointment."
 };
 
 const whatsappUrl = `https://wa.me/${siteConfig.whatsappNumber}?text=${encodeURIComponent(siteConfig.whatsappMessage)}`;
@@ -47,19 +47,21 @@ document.querySelectorAll("[data-reveal]").forEach((node, index) => {
   revealObserver.observe(node);
 });
 
-const filterButtons = document.querySelectorAll("[data-filter]");
-const galleryItems = document.querySelectorAll("[data-category]");
+document.querySelectorAll("[data-filter-group]").forEach((group) => {
+  const filterButtons = group.querySelectorAll("[data-filter]");
+  const filterItems = group.querySelectorAll("[data-category]");
 
-filterButtons.forEach((button) => {
-  button.addEventListener("click", () => {
-    const filter = button.dataset.filter;
+  filterButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const filter = button.dataset.filter;
 
-    filterButtons.forEach((item) => item.classList.remove("active"));
-    button.classList.add("active");
+      filterButtons.forEach((item) => item.classList.remove("active"));
+      button.classList.add("active");
 
-    galleryItems.forEach((item) => {
-      const matches = filter === "all" || item.dataset.category.includes(filter);
-      item.hidden = !matches;
+      filterItems.forEach((item) => {
+        const matches = filter === "all" || item.dataset.category.includes(filter);
+        item.hidden = !matches;
+      });
     });
   });
 });
@@ -109,7 +111,16 @@ const appointmentForm = document.querySelector("[data-appointment-form]");
 if (appointmentForm) {
   const dateField = appointmentForm.querySelector("#date");
   const timeField = appointmentForm.querySelector("#time");
+  const serviceField = appointmentForm.querySelector("#service");
+  const stylistField = appointmentForm.querySelector("#stylist");
+  const phoneField = appointmentForm.querySelector("#phone");
   const availabilityFeedback = appointmentForm.querySelector("[data-availability-feedback]");
+  const submitButton = appointmentForm.querySelector("button[type='submit']");
+  const formPanel = document.querySelector("[data-booking-form-panel]");
+  const confirmationPanel = document.querySelector("[data-booking-confirmation]");
+  const bookingSummary = document.querySelector("[data-booking-summary]");
+  const bookingWhatsapp = document.querySelector("[data-booking-whatsapp]");
+  const bookingNew = document.querySelector("[data-booking-new]");
 
   const today = new Date();
   const yyyy = today.getFullYear();
@@ -134,11 +145,72 @@ if (appointmentForm) {
     timeField.disabled = disabled;
   };
 
+  const escapeHtml = (value) => String(value || "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  }[char]));
+
+  const labelTime = (value) => {
+    if (!value) return "";
+    const [hours, minutes] = value.split(":").map(Number);
+    const suffix = hours >= 12 ? "PM" : "AM";
+    return `${hours % 12 || 12}:${String(minutes).padStart(2, "0")} ${suffix}`;
+  };
+
+  const formatDateTime = (value) => {
+    if (!value) return "-";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleString("en-MY", {
+      dateStyle: "medium",
+      timeStyle: "short",
+      timeZone: "Asia/Kuala_Lumpur"
+    });
+  };
+
+  const buildBookingMessage = (booking) => [
+    "Hi The KYA Hair Salon, I want to confirm my appointment.",
+    "",
+    `Booking ID: ${booking.bookingId}`,
+    `Name: ${booking.name}`,
+    `Service: ${booking.service}`,
+    `Stylist: ${booking.stylist}`,
+    `Date: ${booking.date}`,
+    `Time: ${labelTime(booking.time)}`,
+    `Phone: ${booking.phone}`,
+    `Remarks: ${booking.remarks || "-"}`
+  ].join("\n");
+
+  const showBookingConfirmation = (booking, holdMinutes) => {
+    bookingSummary.innerHTML = [
+      ["Booking ID", booking.bookingId],
+      ["Status", "Pending confirmation"],
+      ["Service", booking.service],
+      ["Stylist", booking.stylist],
+      ["Date", booking.date],
+      ["Time", labelTime(booking.time)],
+      ["Name", booking.name],
+      ["Phone", booking.phone],
+      ["Remarks", booking.remarks || "-"],
+      ["Held until", formatDateTime(booking.expiresAt)]
+    ].map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("");
+
+    bookingWhatsapp.href = `https://wa.me/${siteConfig.whatsappNumber}?text=${encodeURIComponent(buildBookingMessage(booking))}`;
+    confirmationPanel.hidden = false;
+    formPanel.hidden = true;
+    confirmationPanel.querySelector("h3").textContent = `Your slot is held for ${holdMinutes || 10} minutes.`;
+    confirmationPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   const loadAvailability = async () => {
     const date = dateField.value;
-    if (!date) {
-      setTimeOptions([], "Select a date first", true);
-      availabilityFeedback.textContent = "Choose a date to view available appointment times.";
+    const stylist = stylistField.value;
+    if (!stylist || !date) {
+      setTimeOptions([], "Select stylist and date first", true);
+      availabilityFeedback.textContent = "Choose a stylist and date to view available appointment times.";
       return;
     }
 
@@ -146,7 +218,7 @@ if (appointmentForm) {
     setTimeOptions([], "Loading available slots...", true);
 
     try {
-      const response = await fetch(`/api/availability?date=${encodeURIComponent(date)}`);
+      const response = await fetch(`/api/availability?date=${encodeURIComponent(date)}&stylist=${encodeURIComponent(stylist)}`);
       const payload = await response.json();
 
       if (!response.ok) {
@@ -161,7 +233,7 @@ if (appointmentForm) {
 
       if (!payload.slots.length) {
         setTimeOptions([], "No slots available", true);
-      availabilityFeedback.textContent = "This date is fully booked. Please choose another preferred date.";
+        availabilityFeedback.textContent = "No slots are available for this stylist on this date. Please choose another date or stylist.";
         return;
       }
 
@@ -173,21 +245,69 @@ if (appointmentForm) {
     }
   };
 
+  serviceField.addEventListener("change", loadAvailability);
+  stylistField.addEventListener("change", loadAvailability);
   dateField.addEventListener("change", loadAvailability);
 
-  appointmentForm.addEventListener("submit", (event) => {
+  appointmentForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     const data = new FormData(appointmentForm);
-    const message = [
-      "Hi The Muse Salon, I would like to book an appointment.",
-      `Name: ${data.get("name") || ""}`,
-      `Phone: ${data.get("phone") || ""}`,
-      `Preferred date: ${data.get("date") || ""}`,
-      `Preferred time: ${data.get("time") || ""}`,
-      `Service: ${data.get("service") || ""}`,
-      `Message: ${data.get("message") || ""}`
-    ].join("\n");
 
-    window.location.href = `https://wa.me/${siteConfig.whatsappNumber}?text=${encodeURIComponent(message)}`;
+    if (!appointmentForm.checkValidity()) {
+      availabilityFeedback.textContent = "Please complete the required fields.";
+      appointmentForm.reportValidity();
+      return;
+    }
+
+    const phoneDigits = String(data.get("phone") || "").replace(/\D/g, "");
+    if (phoneDigits.length < 8 || phoneDigits.length > 15) {
+      availabilityFeedback.textContent = "Please enter a valid phone number.";
+      phoneField.focus();
+      return;
+    }
+
+    const originalText = submitButton.textContent;
+    submitButton.disabled = true;
+    submitButton.textContent = "Holding slot...";
+    availabilityFeedback.textContent = "Creating your pending booking...";
+
+    try {
+      const response = await fetch("/api/bookings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          service: data.get("service"),
+          stylist: data.get("stylist"),
+          date: data.get("date"),
+          time: data.get("time"),
+          name: data.get("name"),
+          phone: data.get("phone"),
+          remarks: data.get("remarks")
+        })
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        if (payload.code === "slot_unavailable") {
+          await loadAvailability();
+        }
+        throw new Error(payload.error || "Could not create booking.");
+      }
+
+      showBookingConfirmation(payload.booking, payload.holdMinutes);
+    } catch (error) {
+      availabilityFeedback.textContent = error.message;
+    } finally {
+      submitButton.disabled = false;
+      submitButton.textContent = originalText;
+    }
+  });
+
+  bookingNew?.addEventListener("click", () => {
+    appointmentForm.reset();
+    setTimeOptions([], "Select stylist and date first", true);
+    availabilityFeedback.textContent = "Choose a stylist and date to view available appointment times.";
+    confirmationPanel.hidden = true;
+    formPanel.hidden = false;
   });
 }

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 800" role="img" aria-labelledby="title desc">
+  <title id="title">Nova Lee portrait illustration</title>
+  <desc id="desc">Editorial portrait illustration for a junior stylist.</desc>
+  <rect width="640" height="800" fill="#181512"/>
+  <path d="M120 168c56-86 198-126 305-75 116 55 159 205 126 350-29 130-113 210-222 213-115 3-207-68-246-189-37-117-31-220 37-299Z" fill="#2c2520"/>
+  <path d="M199 223c43-63 136-76 197-30 53 40 74 111 53 181-23 77-84 126-156 121-77-6-134-66-141-149-4-47 12-90 47-123Z" fill="#c79462"/>
+  <path d="M159 286c16-111 94-185 199-184 86 1 151 55 179 148-85 18-168 2-249-49-27 44-70 73-129 85Z" fill="#51352c"/>
+  <path d="M127 620c39-86 106-132 198-132s162 46 208 132v180H127V620Z" fill="#eee1cf"/>
+  <path d="M225 611c29 35 62 52 99 52 39 0 73-17 101-52" fill="none" stroke="#a98546" stroke-width="12" stroke-linecap="round"/>
+  <path d="M162 676h326" stroke="#d7b45a" stroke-width="5" stroke-linecap="round"/>
+</svg>

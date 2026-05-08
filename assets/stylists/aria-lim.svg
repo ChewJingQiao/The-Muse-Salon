@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 800" role="img" aria-labelledby="title desc">
+  <title id="title">Aria Lim portrait illustration</title>
+  <desc id="desc">Editorial portrait illustration for a salon director.</desc>
+  <rect width="640" height="800" fill="#191613"/>
+  <path d="M0 0h640v800H0z" fill="#191613"/>
+  <path d="M104 128c78-86 255-96 348-18 101 86 104 274 45 410-47 108-143 161-241 144-105-18-173-91-196-197-25-116-12-276 44-339Z" fill="#2a2420"/>
+  <path d="M185 229c29-79 113-119 197-93 72 22 114 89 111 164-4 101-72 182-164 182-95 0-168-83-168-186 0-24 7-48 24-67Z" fill="#cfa878"/>
+  <path d="M158 232c44-102 162-150 263-104 61 28 96 85 102 155-62-20-118-54-164-102-42 49-110 82-201 99 0-15 0-31 0-48Z" fill="#4d3428"/>
+  <path d="M135 620c37-89 107-137 194-137s157 48 195 137v180H135V620Z" fill="#f0e5d3"/>
+  <path d="M210 623c34 31 71 47 113 47 45 0 84-16 117-47" fill="none" stroke="#a98546" stroke-width="12" stroke-linecap="round"/>
+  <path d="M191 662h266" stroke="#d7b45a" stroke-width="5" stroke-linecap="round"/>
+</svg>

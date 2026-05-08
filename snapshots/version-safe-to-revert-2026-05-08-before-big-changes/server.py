@@ -3,7 +3,6 @@ import hmac
 import json
 import mimetypes
 import os
-import re
 import secrets
 from datetime import datetime, timedelta
 from email.utils import formatdate
@@ -17,58 +16,16 @@ BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 SETTINGS_PATH = DATA_DIR / "booking-settings.json"
 AVAILABILITY_PATH = DATA_DIR / "availability.csv"
-BOOKINGS_PATH = DATA_DIR / "bookings.json"
 ADMIN_CONFIG_PATH = BASE_DIR / "admin-config.local.json"
 ADMIN_CONFIG_SAMPLE_PATH = BASE_DIR / "admin-config.sample.json"
-ADMIN_COOKIE_NAME = "kya_admin_session"
-ANY_STYLIST = "Any available stylist"
-HOLD_MINUTES = 10
-BOOKING_STATUSES = {"pending", "confirmed", "cancelled", "expired"}
-DEFAULT_SERVICES = [
-    "Haircut & Styling",
-    "Hair Coloring",
-    "Hair Treatment",
-    "Rebonding / Smoothing",
-    "Perm",
-    "Scalp Care",
-    "Wash & Blow",
-]
-DEFAULT_STYLISTS = [
-    {"name": "Aria Lim", "level": "Director"},
-    {"name": "Elena Choo", "level": "Director"},
-    {"name": "Mika Tan", "level": "Senior Stylist"},
-    {"name": "Rina Wong", "level": "Senior Stylist"},
-    {"name": "Celia Ng", "level": "Senior Stylist"},
-    {"name": "Nova Lee", "level": "Junior Stylist"},
-    {"name": "Ivy Teo", "level": "Junior Stylist"},
-]
-DEFAULT_SETTINGS = {
-    "timezone": "Asia/Kuala_Lumpur",
-    "slotDurationMinutes": 30,
-    "holdMinutes": HOLD_MINUTES,
-    "services": DEFAULT_SERVICES,
-    "stylists": DEFAULT_STYLISTS,
-    "weeklyHours": {
-        "monday": {"open": "11:30", "close": "20:00"},
-        "tuesday": {"open": "11:30", "close": "20:00"},
-        "wednesday": {"open": "11:30", "close": "20:00"},
-        "thursday": {"open": "11:30", "close": "20:00"},
-        "friday": {"open": "11:30", "close": "20:00"},
-        "saturday": {"open": "11:30", "close": "20:00"},
-        "sunday": {"open": "11:30", "close": "18:00"},
-    },
-}
 
 TOP_LEVEL_FILES = {
     "index.html",
     "about.html",
     "services.html",
-    "stylists.html",
     "gallery.html",
     "contact.html",
     "admin.html",
-    "404.html",
-    "robots.txt",
 }
 PROTECTED_PREFIXES = ("data/", "snapshots/", ".")
 SESSIONS = {}
@@ -79,14 +36,29 @@ def ensure_bootstrap_files():
     DATA_DIR.mkdir(exist_ok=True)
 
     if not SETTINGS_PATH.exists():
-        SETTINGS_PATH.write_text(json.dumps(DEFAULT_SETTINGS, indent=2) + "\n", encoding="utf-8")
+      SETTINGS_PATH.write_text(
+          json.dumps(
+              {
+                  "timezone": "Asia/Kuala_Lumpur",
+                  "slotDurationMinutes": 30,
+                  "weeklyHours": {
+                      "monday": {"open": "11:30", "close": "20:00"},
+                      "tuesday": {"open": "11:30", "close": "20:00"},
+                      "wednesday": {"open": "11:30", "close": "20:00"},
+                      "thursday": {"open": "11:30", "close": "20:00"},
+                      "friday": {"open": "11:30", "close": "20:00"},
+                      "saturday": {"open": "11:30", "close": "20:00"},
+                      "sunday": {"open": "11:30", "close": "18:00"}
+                  }
+              },
+              indent=2
+          ) + "\n",
+          encoding="utf-8"
+      )
 
     if not AVAILABILITY_PATH.exists():
         sample = BASE_DIR / "admin-samples" / "availability.sample.csv"
         AVAILABILITY_PATH.write_text(sample.read_text(encoding="utf-8"), encoding="utf-8")
-
-    if not BOOKINGS_PATH.exists():
-        BOOKINGS_PATH.write_text("[]\n", encoding="utf-8")
 
     if not ADMIN_CONFIG_SAMPLE_PATH.exists():
         ADMIN_CONFIG_SAMPLE_PATH.write_text(
@@ -118,105 +90,11 @@ def read_json(path):
 
 
 def read_settings():
-    settings = read_json(SETTINGS_PATH)
-    for key, value in DEFAULT_SETTINGS.items():
-        settings.setdefault(key, value)
-    settings.setdefault("services", DEFAULT_SERVICES)
-    settings.setdefault("stylists", DEFAULT_STYLISTS)
-    settings.setdefault("holdMinutes", HOLD_MINUTES)
-    return settings
+    return read_json(SETTINGS_PATH)
 
 
 def read_admin_config():
     return read_json(ADMIN_CONFIG_PATH)
-
-
-def utc_now():
-    return datetime.utcnow().replace(microsecond=0)
-
-
-def isoformat_utc(value):
-    return value.replace(microsecond=0).isoformat() + "Z"
-
-
-def parse_iso_utc(value):
-    if not value:
-        return None
-    normalized = str(value).replace("Z", "").split(".")[0]
-    return datetime.fromisoformat(normalized)
-
-
-def read_bookings():
-    if not BOOKINGS_PATH.exists():
-        BOOKINGS_PATH.write_text("[]\n", encoding="utf-8")
-
-    bookings = json.loads(BOOKINGS_PATH.read_text(encoding="utf-8") or "[]")
-    changed = expire_stale_bookings(bookings)
-    if changed:
-        write_bookings(bookings)
-    return bookings
-
-
-def write_bookings(bookings):
-    BOOKINGS_PATH.write_text(json.dumps(bookings, indent=2) + "\n", encoding="utf-8")
-
-
-def expire_stale_bookings(bookings):
-    now = utc_now()
-    changed = False
-    for booking in bookings:
-        if booking.get("status") == "pending":
-            expires_at = parse_iso_utc(booking.get("expiresAt"))
-            if expires_at and expires_at <= now:
-                booking["status"] = "expired"
-                changed = True
-    return changed
-
-
-def active_booking_blocks_slot(booking):
-    if booking.get("status") == "confirmed":
-        return True
-    if booking.get("status") != "pending":
-        return False
-    expires_at = parse_iso_utc(booking.get("expiresAt"))
-    return bool(expires_at and expires_at > utc_now())
-
-
-def stylists_conflict(left, right):
-    return left == right or left == ANY_STYLIST or right == ANY_STYLIST
-
-
-def booking_blocks_slot(booking, date, time, stylist, exclude_booking_id=None):
-    booking_id = booking.get("bookingId") or booking.get("id")
-    if exclude_booking_id and booking_id == exclude_booking_id:
-        return False
-    return (
-        booking.get("date") == date
-        and booking.get("time") == time
-        and stylists_conflict(booking.get("stylist") or ANY_STYLIST, stylist or ANY_STYLIST)
-        and active_booking_blocks_slot(booking)
-    )
-
-
-def generate_booking_id(existing_bookings):
-    existing = {booking.get("bookingId") for booking in existing_bookings}
-    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-    while True:
-        suffix = "".join(secrets.choice(alphabet) for _ in range(4))
-        booking_id = f"KYA-{suffix}"
-        if booking_id not in existing:
-            return booking_id
-
-
-def booking_for_admin(booking):
-    item = booking.copy()
-    item["holdActive"] = active_booking_blocks_slot(booking) and booking.get("status") == "pending"
-    item["blocksSlot"] = booking.get("status") == "confirmed"
-    return item
-
-
-def sort_bookings(bookings):
-    return sorted(bookings, key=lambda item: (item.get("date", ""), item.get("time", ""), item.get("createdAt", "")))
 
 
 def parse_csv_text(csv_text):
@@ -328,59 +206,6 @@ def validate_entry_payload(payload):
     }
 
 
-def validate_booking_payload(payload):
-    settings = read_settings()
-    service = (payload.get("service") or "").strip()
-    stylist = (payload.get("stylist") or "").strip() or ANY_STYLIST
-    date = (payload.get("date") or "").strip()
-    time = (payload.get("time") or "").strip()
-    name = (payload.get("name") or "").strip()
-    phone = (payload.get("phone") or "").strip()
-    remarks = (payload.get("remarks") or payload.get("message") or "").strip()
-
-    missing = []
-    for key, value in {
-        "service": service,
-        "stylist": stylist,
-        "date": date,
-        "time": time,
-        "name": name,
-        "phone": phone,
-    }.items():
-        if not value:
-            missing.append(key)
-    if missing:
-        raise ValueError("Missing required fields.")
-
-    if service not in settings.get("services", DEFAULT_SERVICES):
-        raise ValueError("Please choose a valid service.")
-
-    valid_stylists = {ANY_STYLIST, *(item["name"] for item in settings.get("stylists", DEFAULT_STYLISTS))}
-    if stylist not in valid_stylists:
-        raise ValueError("Please choose a valid stylist.")
-
-    try:
-        datetime.strptime(date, "%Y-%m-%d")
-    except ValueError as exc:
-        raise ValueError("Date must be in YYYY-MM-DD format.") from exc
-
-    parse_time(time)
-
-    phone_digits = re.sub(r"\D", "", phone)
-    if len(phone_digits) < 8 or len(phone_digits) > 15:
-        raise ValueError("Please enter a valid phone number.")
-
-    return {
-        "service": service,
-        "stylist": stylist,
-        "date": date,
-        "time": time,
-        "name": name,
-        "phone": phone,
-        "remarks": remarks[:500],
-    }
-
-
 def parse_time(value):
     return datetime.strptime(value, "%H:%M")
 
@@ -391,10 +216,9 @@ def minutes_to_label(value):
     return label.lstrip("0")
 
 
-def generate_slots_for_date(date_str, stylist=ANY_STYLIST, exclude_booking_id=None):
+def generate_slots_for_date(date_str):
     settings = read_settings()
     _, entries = read_availability_entries()
-    bookings = read_bookings()
 
     date_obj = datetime.strptime(date_str, "%Y-%m-%d")
     weekday = date_obj.strftime("%A").lower()
@@ -404,7 +228,6 @@ def generate_slots_for_date(date_str, stylist=ANY_STYLIST, exclude_booking_id=No
     if not hours:
         return {
             "date": date_str,
-            "stylist": stylist or ANY_STYLIST,
             "closed": True,
             "reason": "No business hours configured for this day.",
             "slots": []
@@ -415,7 +238,6 @@ def generate_slots_for_date(date_str, stylist=ANY_STYLIST, exclude_booking_id=No
     if closed_entry:
         return {
             "date": date_str,
-            "stylist": stylist or ANY_STYLIST,
             "closed": True,
             "reason": closed_entry["reason"] or "Unavailable on this date.",
             "slots": []
@@ -439,8 +261,7 @@ def generate_slots_for_date(date_str, stylist=ANY_STYLIST, exclude_booking_id=No
     for slot in slots:
         slot_time = parse_time(slot)
         is_blocked = any(start <= slot_time < end for start, end in blocked_ranges)
-        is_booked = any(booking_blocks_slot(booking, date_str, slot, stylist, exclude_booking_id) for booking in bookings)
-        if not is_blocked and not is_booked:
+        if not is_blocked:
             available_slots.append(
                 {
                     "value": slot,
@@ -450,7 +271,6 @@ def generate_slots_for_date(date_str, stylist=ANY_STYLIST, exclude_booking_id=No
 
     return {
         "date": date_str,
-        "stylist": stylist or ANY_STYLIST,
         "closed": False,
         "reason": "",
         "slots": available_slots
@@ -478,15 +298,15 @@ def is_authenticated(handler):
 
     jar = cookies.SimpleCookie()
     jar.load(cookie_header)
-    session_cookie = jar.get(ADMIN_COOKIE_NAME)
+    session_cookie = jar.get("muse_admin_session")
     if not session_cookie:
         return False
 
     return session_cookie.value in SESSIONS
 
 
-class KyaSalonHandler(BaseHTTPRequestHandler):
-    server_version = "KyaSalonServer/0.2"
+class MuseSalonHandler(BaseHTTPRequestHandler):
+    server_version = "MuseSalonServer/0.1"
 
     def do_GET(self):
         parsed = urlparse(self.path)
@@ -516,10 +336,6 @@ class KyaSalonHandler(BaseHTTPRequestHandler):
             return self.handle_admin_save_entry()
         if parsed.path == "/api/admin/delete-entry":
             return self.handle_admin_delete_entry()
-        if parsed.path == "/api/bookings":
-            return self.handle_create_booking()
-        if parsed.path == "/api/admin/update-booking-status":
-            return self.handle_admin_update_booking_status()
 
         self.send_error(404, "Not found")
 
@@ -575,9 +391,8 @@ class KyaSalonHandler(BaseHTTPRequestHandler):
             return self.write_json({"error": "date is required"}, status=400)
 
         date_str = date_values[0]
-        stylist = (params.get("stylist", [ANY_STYLIST])[0] or ANY_STYLIST).strip()
         try:
-            payload = generate_slots_for_date(date_str, stylist)
+            payload = generate_slots_for_date(date_str)
         except ValueError:
             return self.write_json({"error": "invalid date format"}, status=400)
         except Exception as exc:
@@ -602,7 +417,7 @@ class KyaSalonHandler(BaseHTTPRequestHandler):
         return self.write_json(
             {"authenticated": True},
             extra_headers={
-                "Set-Cookie": f"{ADMIN_COOKIE_NAME}={token}; Path=/; HttpOnly; SameSite=Lax"
+                "Set-Cookie": f"muse_admin_session={token}; Path=/; HttpOnly; SameSite=Lax"
             }
         )
 
@@ -611,13 +426,13 @@ class KyaSalonHandler(BaseHTTPRequestHandler):
         if cookie_header:
             jar = cookies.SimpleCookie()
             jar.load(cookie_header)
-            session_cookie = jar.get(ADMIN_COOKIE_NAME)
+            session_cookie = jar.get("muse_admin_session")
             if session_cookie:
                 SESSIONS.pop(session_cookie.value, None)
 
         return self.write_json(
             {"ok": True},
-            extra_headers={"Set-Cookie": f"{ADMIN_COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0"}
+            extra_headers={"Set-Cookie": "muse_admin_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0"}
         )
 
     def handle_admin_availability(self):
@@ -635,111 +450,10 @@ class KyaSalonHandler(BaseHTTPRequestHandler):
             {
                 "csv_text": csv_text,
                 "entries": entries_with_row_ids,
-                "bookings": [booking_for_admin(booking) for booking in sort_bookings(read_bookings())],
                 "settings": read_settings(),
                 "config_warning": read_admin_config().get("admin_password") == "change-this-password"
             }
         )
-
-    def handle_create_booking(self):
-        try:
-            payload = validate_booking_payload(self.read_json_body())
-        except ValueError as exc:
-            return self.write_json({"error": str(exc), "code": "invalid_booking"}, status=400)
-
-        try:
-            availability = generate_slots_for_date(payload["date"], payload["stylist"])
-        except ValueError:
-            return self.write_json({"error": "Invalid date format.", "code": "invalid_date"}, status=400)
-
-        if not any(slot["value"] == payload["time"] for slot in availability["slots"]):
-            return self.write_json(
-                {
-                    "error": "Slot already taken or no longer available. Please choose another time.",
-                    "code": "slot_unavailable",
-                },
-                status=409,
-            )
-
-        bookings = read_bookings()
-        if any(booking_blocks_slot(booking, payload["date"], payload["time"], payload["stylist"]) for booking in bookings):
-            return self.write_json(
-                {
-                    "error": "Slot already taken or no longer available. Please choose another time.",
-                    "code": "slot_unavailable",
-                },
-                status=409,
-            )
-
-        now = utc_now()
-        hold_minutes = int(read_settings().get("holdMinutes", HOLD_MINUTES))
-        booking_id = generate_booking_id(bookings)
-        booking = {
-            "id": booking_id,
-            "bookingId": booking_id,
-            **payload,
-            "status": "pending",
-            "createdAt": isoformat_utc(now),
-            "expiresAt": isoformat_utc(now + timedelta(minutes=hold_minutes)),
-            "confirmedAt": None,
-            "cancelledAt": None,
-        }
-        bookings.append(booking)
-        write_bookings(bookings)
-        return self.write_json({"ok": True, "booking": booking, "holdMinutes": hold_minutes}, status=201)
-
-    def handle_admin_update_booking_status(self):
-        if not is_authenticated(self):
-            return self.write_json({"error": "Unauthorized"}, status=401)
-
-        payload = self.read_json_body()
-        booking_id = (payload.get("bookingId") or payload.get("id") or "").strip()
-        next_status = (payload.get("status") or "").strip().lower()
-        if next_status not in {"confirmed", "cancelled", "expired"}:
-            return self.write_json({"error": "Status must be confirmed, cancelled or expired."}, status=400)
-
-        bookings = read_bookings()
-        booking = next((item for item in bookings if (item.get("bookingId") or item.get("id")) == booking_id), None)
-        if not booking:
-            return self.write_json({"error": "Booking not found."}, status=404)
-
-        now = utc_now()
-        if next_status == "confirmed":
-            if booking.get("status") == "pending":
-                expires_at = parse_iso_utc(booking.get("expiresAt"))
-                if expires_at and expires_at <= now:
-                    booking["status"] = "expired"
-                    write_bookings(bookings)
-                    return self.write_json(
-                        {"error": "This pending hold has expired. Ask the client to submit a new booking.", "code": "pending_expired"},
-                        status=409,
-                    )
-
-            if booking.get("status") not in {"pending", "confirmed"}:
-                return self.write_json({"error": "Only pending bookings can be confirmed."}, status=409)
-
-            availability = generate_slots_for_date(
-                booking["date"],
-                booking.get("stylist") or ANY_STYLIST,
-                exclude_booking_id=booking_id,
-            )
-            if not any(slot["value"] == booking["time"] for slot in availability["slots"]):
-                return self.write_json(
-                    {"error": "This slot is no longer available.", "code": "slot_unavailable"},
-                    status=409,
-                )
-
-            booking["status"] = "confirmed"
-            booking["confirmedAt"] = isoformat_utc(now)
-            booking["cancelledAt"] = None
-        elif next_status == "cancelled":
-            booking["status"] = "cancelled"
-            booking["cancelledAt"] = isoformat_utc(now)
-        else:
-            booking["status"] = "expired"
-
-        write_bookings(bookings)
-        return self.write_json({"ok": True, "booking": booking_for_admin(booking)})
 
     def handle_admin_upload_csv(self):
         if not is_authenticated(self):
@@ -809,8 +523,8 @@ class KyaSalonHandler(BaseHTTPRequestHandler):
 def main():
     ensure_bootstrap_files()
     port = int(os.environ.get("PORT", "4173"))
-    server = ThreadingHTTPServer(("0.0.0.0", port), KyaSalonHandler)
-    print(f"The KYA Hair Salon server running on http://localhost:{port}")
+    server = ThreadingHTTPServer(("0.0.0.0", port), MuseSalonHandler)
+    print(f"Muse Salon server running on http://localhost:{port}")
     server.serve_forever()
 
 

@@ -1,9 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
-  <title id="title">The Muse Salon logo</title>
-  <desc id="desc">Gold Muse Salon monogram and wordmark on a black background.</desc>
-  <rect width="512" height="512" fill="#000000"/>
-  <path d="M97 117v126h23V171l136 128 136-128v72h23V117L256 267 97 117Z" fill="#d7b45a"/>
+  <title id="title">The KYA Hair Salon logo</title>
+  <desc id="desc">Gold KYA salon wordmark on a black background.</desc>
+  <rect width="512" height="512" fill="#050505"/>
+  <g fill="none" stroke="#d7b45a" stroke-linecap="square" stroke-linejoin="miter">
+    <path d="M118 128v132M118 206l88-78M118 206l92 76" stroke-width="25"/>
+    <path d="M215 128l48 86 48-86M263 214v72" stroke-width="23"/>
+    <path d="M326 286l54-158 54 158M349 232h62" stroke-width="23"/>
+  </g>
   <g fill="#d7b45a" font-family="Arial, Helvetica, sans-serif" text-anchor="middle">
-    <text x="256" y="384" font-size="25" letter-spacing="7">THEMUSESALON</text>
+    <text x="256" y="366" font-size="28" letter-spacing="9">THE KYA</text>
+    <text x="256" y="408" font-size="21" letter-spacing="5">HAIR SALON</text>
   </g>
 </svg>

@@ -1,5 +1,5 @@
 date,status,start_time,end_time,reason
-2026-05-20,closed,,,Salon closed for training
-2026-05-12,blocked,13:00,14:30,Lunch / private appointment
-2026-05-17,blocked,16:00,17:00,Staff unavailable
 2026-05-15,closed,,,Training
+2026-05-10,blocked,11:30,14:00,Cleaning
+2026-05-22,blocked,13:30,15:00,Lunch Break
+2026-05-21,closed,,,Renovation

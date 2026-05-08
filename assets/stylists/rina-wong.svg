@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 800" role="img" aria-labelledby="title desc">
+  <title id="title">Rina Wong portrait illustration</title>
+  <desc id="desc">Editorial portrait illustration for a senior stylist.</desc>
+  <rect width="640" height="800" fill="#181512"/>
+  <path d="M98 180c58-95 202-139 317-91 120 51 170 199 142 350-26 137-112 223-226 227-120 4-216-70-256-196-36-115-27-213 23-290Z" fill="#29231f"/>
+  <path d="M196 224c45-66 142-81 205-32 55 42 76 119 52 191-25 77-88 126-160 119-79-7-136-71-140-158-2-47 13-89 43-120Z" fill="#c79360"/>
+  <path d="M154 287c18-115 99-190 208-184 92 5 157 65 177 157-85 18-170 2-255-49-30 44-73 69-130 76Z" fill="#4c332b"/>
+  <path d="M124 620c40-86 108-133 198-133 92 0 161 47 207 133v180H124V620Z" fill="#efe4d3"/>
+  <path d="M218 614c29 36 63 54 103 54 41 0 77-18 106-54" fill="none" stroke="#a98546" stroke-width="12" stroke-linecap="round"/>
+</svg>

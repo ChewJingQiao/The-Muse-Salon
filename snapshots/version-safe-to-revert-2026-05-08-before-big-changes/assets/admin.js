@@ -1,7 +1,6 @@
 const adminState = {
   authenticated: false,
-  entries: [],
-  bookings: []
+  entries: []
 };
 
 const loginCard = document.querySelector("[data-admin-login-card]");
@@ -17,8 +16,6 @@ const tableBody = document.querySelector("[data-admin-table-body]");
 const hoursTarget = document.querySelector("[data-admin-hours]");
 const warning = document.querySelector("[data-admin-warning]");
 const csvSaveButton = document.querySelector("[data-admin-save-csv]");
-const bookingsTarget = document.querySelector("[data-admin-bookings]");
-const confirmedBlocksTarget = document.querySelector("[data-admin-confirmed-blocks]");
 
 const blockForm = document.querySelector("[data-admin-block-form]");
 const rowIndexField = document.querySelector("[data-entry-row-index]");
@@ -28,38 +25,6 @@ const startField = document.querySelector("[data-entry-start]");
 const endField = document.querySelector("[data-entry-end]");
 const reasonField = document.querySelector("[data-entry-reason]");
 const clearEntryButton = document.querySelector("[data-entry-clear]");
-
-function escapeHtml(value) {
-  return String(value || "").replace(/[&<>"']/g, (char) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#39;"
-  }[char]));
-}
-
-function labelTime(value) {
-  if (!value) return "-";
-  const [hours, minutes] = value.split(":").map(Number);
-  const suffix = hours >= 12 ? "PM" : "AM";
-  return `${hours % 12 || 12}:${String(minutes).padStart(2, "0")} ${suffix}`;
-}
-
-function formatDateTime(value) {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString("en-MY", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "Asia/Kuala_Lumpur"
-  });
-}
-
-function statusLabel(status) {
-  return status.charAt(0).toUpperCase() + status.slice(1);
-}
 
 function setAdminView() {
   loginCard.hidden = adminState.authenticated;
@@ -114,83 +79,6 @@ function renderEntries(entries) {
   `).join("");
 }
 
-function bookingActions(booking) {
-  if (booking.status === "pending" && booking.holdActive) {
-    return `
-      <button class="button dark admin-row-action" type="button" data-booking-action="confirmed" data-booking-id="${escapeHtml(booking.bookingId)}">Confirm</button>
-      <button class="button outline-dark admin-row-action" type="button" data-booking-action="cancelled" data-booking-id="${escapeHtml(booking.bookingId)}">Cancel</button>
-      <button class="button outline-dark admin-row-action" type="button" data-booking-action="expired" data-booking-id="${escapeHtml(booking.bookingId)}">Expire</button>
-    `;
-  }
-
-  if (booking.status === "pending") {
-    return `<button class="button outline-dark admin-row-action" type="button" data-booking-action="expired" data-booking-id="${escapeHtml(booking.bookingId)}">Mark Expired</button>`;
-  }
-
-  if (booking.status === "confirmed") {
-    return `<button class="button outline-dark admin-row-action" type="button" data-booking-action="cancelled" data-booking-id="${escapeHtml(booking.bookingId)}">Cancel</button>`;
-  }
-
-  return '<span class="muted">No actions needed</span>';
-}
-
-function renderBookings(bookings) {
-  adminState.bookings = bookings;
-
-  if (!bookings.length) {
-    bookingsTarget.innerHTML = '<div class="admin-empty-panel">No customer bookings yet.</div>';
-    return;
-  }
-
-  const grouped = bookings.reduce((acc, booking) => {
-    const date = booking.date || "No date";
-    acc[date] = acc[date] || [];
-    acc[date].push(booking);
-    return acc;
-  }, {});
-
-  bookingsTarget.innerHTML = Object.entries(grouped).map(([date, items]) => `
-    <section class="booking-group">
-      <h4>${escapeHtml(date)}</h4>
-      <div class="booking-card-grid">
-        ${items.map((booking) => `
-          <article class="booking-card status-${escapeHtml(booking.status)}">
-            <div class="booking-card-head">
-              <strong>${escapeHtml(booking.bookingId)}</strong>
-              <span class="status-pill ${escapeHtml(booking.status)}">${escapeHtml(statusLabel(booking.status))}</span>
-            </div>
-            <dl>
-              <div><dt>Client</dt><dd>${escapeHtml(booking.name)}</dd></div>
-              <div><dt>Phone</dt><dd><a href="tel:${escapeHtml(booking.phone)}">${escapeHtml(booking.phone)}</a></dd></div>
-              <div><dt>Service</dt><dd>${escapeHtml(booking.service)}</dd></div>
-              <div><dt>Stylist</dt><dd>${escapeHtml(booking.stylist)}</dd></div>
-              <div><dt>Time</dt><dd>${escapeHtml(labelTime(booking.time))}</dd></div>
-              <div><dt>Remarks</dt><dd>${escapeHtml(booking.remarks || "-")}</dd></div>
-              <div><dt>Hold expires</dt><dd>${escapeHtml(formatDateTime(booking.expiresAt))}</dd></div>
-            </dl>
-            <div class="booking-actions">${bookingActions(booking)}</div>
-          </article>
-        `).join("")}
-      </div>
-    </section>
-  `).join("");
-}
-
-function renderConfirmedBlocks(bookings) {
-  const confirmed = bookings.filter((booking) => booking.status === "confirmed");
-  if (!confirmed.length) {
-    confirmedBlocksTarget.innerHTML = '<div class="admin-empty-panel">No confirmed bookings are blocking slots yet.</div>';
-    return;
-  }
-
-  confirmedBlocksTarget.innerHTML = confirmed.map((booking) => `
-    <div class="confirmed-block">
-      <strong>${escapeHtml(booking.date)} at ${escapeHtml(labelTime(booking.time))}</strong>
-      <span>${escapeHtml(booking.stylist)} · ${escapeHtml(booking.service)} · ${escapeHtml(booking.bookingId)}</span>
-    </div>
-  `).join("");
-}
-
 async function loadAdminData() {
   const response = await fetch("/api/admin/availability", { credentials: "same-origin" });
   if (!response.ok) {
@@ -200,8 +88,6 @@ async function loadAdminData() {
   const payload = await response.json();
   csvEditor.value = payload.csv_text;
   renderEntries(payload.entries);
-  renderBookings(payload.bookings || []);
-  renderConfirmedBlocks(payload.bookings || []);
   renderHours(payload.settings);
   warning.hidden = !payload.config_warning;
 }
@@ -333,37 +219,6 @@ tableBody?.addEventListener("click", async (event) => {
     await loadAdminData();
     clearEntryForm();
   }
-});
-
-bookingsTarget?.addEventListener("click", async (event) => {
-  const button = event.target.closest("button[data-booking-action]");
-  if (!button) return;
-
-  const status = button.dataset.bookingAction;
-  const bookingId = button.dataset.bookingId;
-  const label = status === "confirmed" ? "confirm" : status === "cancelled" ? "cancel" : "mark as expired";
-
-  if (!window.confirm(`Are you sure you want to ${label} booking ${bookingId}?`)) {
-    return;
-  }
-
-  saveFeedback.textContent = "";
-  const response = await fetch("/api/admin/update-booking-status", {
-    method: "POST",
-    credentials: "same-origin",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ bookingId, status })
-  });
-  const result = await response.json();
-
-  if (!response.ok) {
-    saveFeedback.textContent = result.error || "Could not update booking.";
-    await loadAdminData();
-    return;
-  }
-
-  saveFeedback.textContent = `Booking ${bookingId} updated.`;
-  await loadAdminData();
 });
 
 fileInput?.addEventListener("change", async () => {

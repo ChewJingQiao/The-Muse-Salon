@@ -5,13 +5,11 @@ Admin page:
 - URL: `http://localhost:4173/admin.html`
 - Default password source: `admin-config.local.json`
 - Change the placeholder password before real use.
-- For Netlify production, set `ADMIN_PASSWORD` and `SESSION_SECRET` in Netlify environment variables. Do not rely on local config files for production.
 
-Local testing data files:
+Current live data files:
 
 - Availability rows: `data/availability.csv`
 - Business hours and slot length: `data/booking-settings.json`
-- Customer bookings: stored in Netlify Blobs in production and `data/bookings.json` during local testing
 
 How staff can use it:
 

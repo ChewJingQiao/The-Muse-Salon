@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>The KYA Hair Salon Admin | Booking Management</title>
+    <title>The Muse Salon Admin | Availability Blocking</title>
     <meta name="robots" content="noindex,nofollow">
     <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -16,7 +16,7 @@
     <div class="site-shell">
       <header class="site-header">
         <div class="container nav">
-          <a class="brand" href="index.html" aria-label="The KYA Hair Salon home"><img src="assets/logo.svg" alt="The KYA Hair Salon"></a>
+          <a class="brand" href="index.html" aria-label="The Muse Salon home"><img src="assets/logo.svg" alt="The Muse Salon"></a>
           <nav class="nav-links admin-nav-links" aria-label="Primary navigation">
             <a href="index.html">Website</a>
             <a class="active" href="admin.html">Admin</a>
@@ -31,8 +31,8 @@
         <section class="page-hero admin-hero">
           <div class="container">
             <p class="eyebrow">Private Admin</p>
-            <h1>Manage bookings and blocked times.</h1>
-            <p class="lead">Confirm WhatsApp bookings, cancel or expire holds, and keep manual blocked slots in one private panel.</p>
+            <h1>Manage blocked booking times.</h1>
+            <p class="lead">Block dates or time ranges directly in this panel. The booking form will only show valid time slots to clients.</p>
           </div>
         </section>
 
@@ -41,7 +41,7 @@
             <aside class="contact-card admin-login-card" data-admin-login-card>
               <p class="eyebrow">Sign In</p>
               <h2>Availability admin</h2>
-              <p class="muted">This page is protected by the booking API. For Netlify, set `ADMIN_PASSWORD` and `SESSION_SECRET` before launch; local testing uses `admin-config.local.json`.</p>
+              <p class="muted">This page is protected on the server. Change the default password in `admin-config.local.json` before real use.</p>
               <form class="admin-login-form" data-admin-login-form>
                 <div class="field">
                   <label for="admin-password">Password</label>
@@ -55,40 +55,18 @@
             <section class="contact-card admin-dashboard" data-admin-dashboard hidden>
               <div class="admin-panel-head">
                 <div>
-                  <p class="eyebrow">Booking Desk</p>
-                  <h2>Appointment controls</h2>
+                  <p class="eyebrow">Direct Blocking</p>
+                  <h2>Availability controls</h2>
                 </div>
                 <button class="button outline-dark" type="button" data-admin-refresh>Refresh Data</button>
               </div>
 
               <div class="admin-warning" data-admin-warning hidden>
-                Admin security is not fully configured. Set a real admin password and session secret before launch.
-              </div>
-
-              <div class="admin-card">
-                <div class="admin-section-title">
-                  <div>
-                    <p class="eyebrow">Customer Bookings</p>
-                    <h3>Bookings by date</h3>
-                  </div>
-                  <p class="muted">Pending slots are held for 10 minutes. Confirmed bookings permanently block the stylist and time slot.</p>
-                </div>
-                <div class="booking-groups" data-admin-bookings></div>
-              </div>
-
-              <div class="admin-card">
-                <div class="admin-section-title">
-                  <div>
-                    <p class="eyebrow">Blocked by Bookings</p>
-                    <h3>Confirmed appointment slots</h3>
-                  </div>
-                </div>
-                <div class="confirmed-blocks" data-admin-confirmed-blocks></div>
+                The admin password is still set to the default placeholder in `admin-config.local.json`.
               </div>
 
               <div class="admin-grid">
                 <div class="admin-card">
-                  <p class="eyebrow">Manual Blocking</p>
                   <h3>Add or edit a block</h3>
                   <form class="admin-block-form" data-admin-block-form>
                     <input type="hidden" data-entry-row-index>

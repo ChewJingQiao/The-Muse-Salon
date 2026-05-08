@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 800" role="img" aria-labelledby="title desc">
+  <title id="title">Ivy Teo portrait illustration</title>
+  <desc id="desc">Editorial portrait illustration for a junior stylist.</desc>
+  <rect width="640" height="800" fill="#171411"/>
+  <path d="M129 165c63-88 209-121 316-66 115 60 153 211 115 355-34 128-119 204-227 207-116 3-207-69-245-189-36-115-25-225 41-307Z" fill="#2b2420"/>
+  <path d="M199 225c42-65 135-82 199-38 56 39 80 111 59 184-23 80-86 131-158 126-78-6-137-68-143-154-3-47 11-88 43-118Z" fill="#cfa06d"/>
+  <path d="M160 287c21-112 101-184 204-181 86 3 149 58 173 148-82 14-162-2-241-50-32 43-77 70-136 83Z" fill="#50372e"/>
+  <path d="M127 620c41-85 108-130 198-130 91 0 160 45 206 130v180H127V620Z" fill="#efe2cf"/>
+  <path d="M220 614c29 35 64 53 104 53 41 0 76-18 105-53" fill="none" stroke="#a98546" stroke-width="12" stroke-linecap="round"/>
+</svg>
