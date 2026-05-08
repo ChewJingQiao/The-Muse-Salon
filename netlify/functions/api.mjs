@@ -4,7 +4,7 @@ import { getStore } from "@netlify/blobs";
 const SESSION_COOKIE = "kya_admin_session";
 const SESSION_MAX_AGE_SECONDS = 8 * 60 * 60;
 const STORE_NAME = "kya-booking";
-const FUNCTION_VERSION = "2026-05-08-kya-booking-mvp-v1";
+const FUNCTION_VERSION = "2026-05-09-kya-booking-prod-null-settings-fix";
 const ENTRIES_KEY = "availability-entries";
 const SETTINGS_KEY = "booking-settings";
 const BOOKINGS_KEY = "bookings";
@@ -144,17 +144,35 @@ function addMinutes(date, minutes) {
 }
 
 function normalizeSettings(settings = {}) {
+  const source = settings && typeof settings === "object" && !Array.isArray(settings) ? settings : {};
+  const services = Array.isArray(source.services) && source.services.length ? source.services : DEFAULT_SERVICES;
+  const stylists = Array.isArray(source.stylists) && source.stylists.length ? source.stylists : DEFAULT_STYLISTS;
+  const weeklyHours =
+    source.weeklyHours && typeof source.weeklyHours === "object" && !Array.isArray(source.weeklyHours)
+      ? source.weeklyHours
+      : {};
+
   return {
     ...DEFAULT_SETTINGS,
-    ...settings,
-    services: settings.services?.length ? settings.services : DEFAULT_SERVICES,
-    stylists: settings.stylists?.length ? settings.stylists : DEFAULT_STYLISTS,
-    holdMinutes: Number(settings.holdMinutes || HOLD_MINUTES),
+    ...source,
+    services,
+    stylists,
+    holdMinutes: Number(source.holdMinutes || HOLD_MINUTES),
     weeklyHours: {
       ...DEFAULT_SETTINGS.weeklyHours,
-      ...(settings.weeklyHours || {})
+      ...weeklyHours
     }
   };
+}
+
+function normalizeEntries(entries) {
+  if (!Array.isArray(entries)) return [];
+  return entries.map((entry) => normalizeEntry(entry));
+}
+
+function normalizeBookings(bookings) {
+  if (!Array.isArray(bookings)) return [];
+  return bookings.filter((booking) => booking && typeof booking === "object");
 }
 
 function normalizeEntry(raw) {
@@ -330,15 +348,18 @@ function openStore() {
 
 async function getStoreData() {
   const store = openStore();
-  let settings = normalizeSettings(await store.get(SETTINGS_KEY, { type: "json" }));
-  let entries = await store.get(ENTRIES_KEY, { type: "json" });
-  let bookings = await store.get(BOOKINGS_KEY, { type: "json" });
+  const rawSettings = await store.get(SETTINGS_KEY, { type: "json" });
+  const rawEntries = await store.get(ENTRIES_KEY, { type: "json" });
+  const rawBookings = await store.get(BOOKINGS_KEY, { type: "json" });
+  const settings = normalizeSettings(rawSettings);
+  let entries = normalizeEntries(rawEntries);
+  let bookings = normalizeBookings(rawBookings);
 
-  if (!entries) {
+  if (!Array.isArray(rawEntries)) {
     entries = DEFAULT_ENTRIES;
     await store.setJSON(ENTRIES_KEY, entries);
   }
-  if (!bookings) {
+  if (!Array.isArray(rawBookings)) {
     bookings = [];
     await store.setJSON(BOOKINGS_KEY, bookings);
   }
