@@ -4,7 +4,7 @@ import { getStore } from "@netlify/blobs";
 const SESSION_COOKIE = "kya_admin_session";
 const SESSION_MAX_AGE_SECONDS = 8 * 60 * 60;
 const STORE_NAME = "kya-booking";
-const FUNCTION_VERSION = "2026-05-09-kya-booking-prod-null-settings-fix";
+const FUNCTION_VERSION = "2026-05-09-kya-booking-strong-consistency";
 const ENTRIES_KEY = "availability-entries";
 const SETTINGS_KEY = "booking-settings";
 const BOOKINGS_KEY = "bookings";
@@ -348,9 +348,10 @@ function openStore() {
 
 async function getStoreData() {
   const store = openStore();
-  const rawSettings = await store.get(SETTINGS_KEY, { type: "json" });
-  const rawEntries = await store.get(ENTRIES_KEY, { type: "json" });
-  const rawBookings = await store.get(BOOKINGS_KEY, { type: "json" });
+  const readOptions = { type: "json", consistency: "strong" };
+  const rawSettings = await store.get(SETTINGS_KEY, readOptions);
+  const rawEntries = await store.get(ENTRIES_KEY, readOptions);
+  const rawBookings = await store.get(BOOKINGS_KEY, readOptions);
   const settings = normalizeSettings(rawSettings);
   let entries = normalizeEntries(rawEntries);
   let bookings = normalizeBookings(rawBookings);

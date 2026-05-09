@@ -3,6 +3,9 @@ const adminState = {
   entries: [],
   bookings: []
 };
+const ADMIN_REFRESH_INTERVAL_MS = 15000;
+let adminRefreshTimer = null;
+let adminRefreshInFlight = null;
 
 const loginCard = document.querySelector("[data-admin-login-card]");
 const dashboard = document.querySelector("[data-admin-dashboard]");
@@ -192,18 +195,55 @@ function renderConfirmedBlocks(bookings) {
 }
 
 async function loadAdminData() {
-  const response = await fetch("/api/admin/availability", { credentials: "same-origin" });
-  if (!response.ok) {
-    throw new Error("Unable to load availability data.");
-  }
+  if (adminRefreshInFlight) return adminRefreshInFlight;
 
-  const payload = await response.json();
-  csvEditor.value = payload.csv_text;
-  renderEntries(payload.entries);
-  renderBookings(payload.bookings || []);
-  renderConfirmedBlocks(payload.bookings || []);
-  renderHours(payload.settings);
-  warning.hidden = !payload.config_warning;
+  adminRefreshInFlight = (async () => {
+    const response = await fetch(`/api/admin/availability?ts=${Date.now()}`, {
+      credentials: "same-origin",
+      cache: "no-store"
+    });
+    if (!response.ok) {
+      if (response.status === 401) {
+        adminState.authenticated = false;
+        setAdminView();
+      }
+      throw new Error("Unable to load availability data.");
+    }
+
+    const payload = await response.json();
+    csvEditor.value = payload.csv_text;
+    renderEntries(payload.entries);
+    renderBookings(payload.bookings || []);
+    renderConfirmedBlocks(payload.bookings || []);
+    renderHours(payload.settings);
+    warning.hidden = !payload.config_warning;
+  })();
+
+  try {
+    await adminRefreshInFlight;
+  } finally {
+    adminRefreshInFlight = null;
+  }
+}
+
+async function refreshAdminDataQuietly() {
+  if (!adminState.authenticated || document.hidden) return;
+  try {
+    await loadAdminData();
+  } catch {
+    // Keep the current panel visible; manual refresh/login will show actionable errors.
+  }
+}
+
+function startAdminAutoRefresh() {
+  if (adminRefreshTimer) return;
+  adminRefreshTimer = window.setInterval(refreshAdminDataQuietly, ADMIN_REFRESH_INTERVAL_MS);
+}
+
+function stopAdminAutoRefresh() {
+  if (!adminRefreshTimer) return;
+  window.clearInterval(adminRefreshTimer);
+  adminRefreshTimer = null;
 }
 
 async function checkAuth() {
@@ -214,6 +254,9 @@ async function checkAuth() {
   if (adminState.authenticated) {
     await loadAdminData();
     clearEntryForm();
+    startAdminAutoRefresh();
+  } else {
+    stopAdminAutoRefresh();
   }
 }
 
@@ -240,6 +283,7 @@ loginForm?.addEventListener("submit", async (event) => {
   setAdminView();
   await loadAdminData();
   clearEntryForm();
+  startAdminAutoRefresh();
 });
 
 logoutButton?.addEventListener("click", async () => {
@@ -249,12 +293,19 @@ logoutButton?.addEventListener("click", async () => {
   });
   adminState.authenticated = false;
   setAdminView();
+  stopAdminAutoRefresh();
 });
 
 refreshButton?.addEventListener("click", async () => {
   saveFeedback.textContent = "";
   await loadAdminData();
 });
+
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) refreshAdminDataQuietly();
+});
+
+window.addEventListener("focus", refreshAdminDataQuietly);
 
 statusField?.addEventListener("change", updateTimeFieldState);
 clearEntryButton?.addEventListener("click", clearEntryForm);
