@@ -43,6 +43,8 @@ DEFAULT_STYLISTS = [
     {"name": "Nova Lee", "level": "Junior Stylist"},
     {"name": "Ivy Teo", "level": "Junior Stylist"},
 ]
+AVAILABILITY_CSV_REQUIRED_FIELDS = {"date", "status", "start_time", "end_time", "reason"}
+AVAILABILITY_CSV_ALLOWED_FIELDS = AVAILABILITY_CSV_REQUIRED_FIELDS | {"stylist"}
 DEFAULT_SETTINGS = {
     "timezone": "Asia/Kuala_Lumpur",
     "slotDurationMinutes": 30,
@@ -143,6 +145,13 @@ def business_today():
     return (utc_now() + timedelta(hours=8)).date()
 
 
+def business_now():
+    override = os.environ.get("KYA_TEST_NOW", "").strip()
+    if override:
+        return datetime.strptime(override, "%Y-%m-%dT%H:%M")
+    return utc_now() + timedelta(hours=8)
+
+
 def record_cleanup_cutoff_date():
     return business_today() - timedelta(days=RECORD_RETENTION_DAYS_AFTER_DATE)
 
@@ -210,6 +219,16 @@ def stylists_conflict(left, right):
     return left == right or left == ANY_STYLIST or right == ANY_STYLIST
 
 
+def manual_block_applies_to_stylist(entry, stylist):
+    entry_stylist = entry.get("stylist") or ANY_STYLIST
+    requested_stylist = stylist or ANY_STYLIST
+    if entry_stylist == ANY_STYLIST:
+        return True
+    if requested_stylist == ANY_STYLIST:
+        return False
+    return entry_stylist == requested_stylist
+
+
 def booking_blocks_slot(booking, date, time, stylist, exclude_booking_id=None):
     booking_id = booking.get("bookingId") or booking.get("id")
     if exclude_booking_id and booking_id == exclude_booking_id:
@@ -245,9 +264,13 @@ def sort_bookings(bookings):
 
 def parse_csv_text(csv_text):
     reader = csv.DictReader(csv_text.splitlines())
-    required = {"date", "status", "start_time", "end_time", "reason"}
-    if not reader.fieldnames or set(reader.fieldnames) != required:
-        raise ValueError("CSV header must be: date,status,start_time,end_time,reason")
+    fieldnames = set(reader.fieldnames or [])
+    if (
+        not reader.fieldnames
+        or not AVAILABILITY_CSV_REQUIRED_FIELDS.issubset(fieldnames)
+        or not fieldnames.issubset(AVAILABILITY_CSV_ALLOWED_FIELDS)
+    ):
+        raise ValueError("CSV header must include: date,status,start_time,end_time,reason. Optional: stylist")
 
     entries = []
     for index, row in enumerate(reader, start=2):
@@ -256,6 +279,7 @@ def parse_csv_text(csv_text):
         start_time = (row.get("start_time") or "").strip()
         end_time = (row.get("end_time") or "").strip()
         reason = (row.get("reason") or "").strip()
+        stylist = (row.get("stylist") or ANY_STYLIST).strip() or ANY_STYLIST
 
         if not date:
             raise ValueError(f"Row {index}: date is required")
@@ -283,6 +307,7 @@ def parse_csv_text(csv_text):
             {
                 "date": date,
                 "status": status,
+                "stylist": stylist,
                 "start_time": start_time,
                 "end_time": end_time,
                 "reason": reason
@@ -304,7 +329,7 @@ def read_availability_entries():
 
 
 def write_availability_entries(entries):
-    output = ["date,status,start_time,end_time,reason"]
+    output = ["date,status,start_time,end_time,reason,stylist"]
     for entry in entries:
         output.append(
             ",".join(
@@ -313,7 +338,8 @@ def write_availability_entries(entries):
                     entry["status"],
                     entry["start_time"],
                     entry["end_time"],
-                    entry["reason"].replace(",", " ")
+                    entry["reason"].replace(",", " "),
+                    (entry.get("stylist") or ANY_STYLIST).replace(",", " ")
                 ]
             )
         )
@@ -326,6 +352,7 @@ def validate_entry_payload(payload):
     start_time = (payload.get("start_time") or "").strip()
     end_time = (payload.get("end_time") or "").strip()
     reason = (payload.get("reason") or "").strip()
+    stylist = (payload.get("stylist") or ANY_STYLIST).strip() or ANY_STYLIST
 
     if not date:
         raise ValueError("Date is required.")
@@ -336,6 +363,10 @@ def validate_entry_payload(payload):
 
     if status not in {"closed", "blocked"}:
         raise ValueError("Status must be 'closed' or 'blocked'.")
+
+    valid_stylists = {ANY_STYLIST, *(item["name"] for item in read_settings().get("stylists", DEFAULT_STYLISTS))}
+    if stylist not in valid_stylists:
+        raise ValueError("Please choose a valid stylist.")
 
     if status == "closed":
         start_time = ""
@@ -351,6 +382,7 @@ def validate_entry_payload(payload):
     return {
         "date": date,
         "status": status,
+        "stylist": stylist,
         "start_time": start_time,
         "end_time": end_time,
         "reason": reason
@@ -440,7 +472,10 @@ def generate_slots_for_date(date_str, stylist=ANY_STYLIST, exclude_booking_id=No
         }
 
     day_entries = [item for item in entries if item["date"] == date_str]
-    closed_entry = next((item for item in day_entries if item["status"] == "closed"), None)
+    closed_entry = next(
+        (item for item in day_entries if item["status"] == "closed" and manual_block_applies_to_stylist(item, stylist)),
+        None,
+    )
     if closed_entry:
         return {
             "date": date_str,
@@ -461,12 +496,18 @@ def generate_slots_for_date(date_str, stylist=ANY_STYLIST, exclude_booking_id=No
 
     blocked_ranges = []
     for entry in day_entries:
-        if entry["status"] == "blocked":
+        if entry["status"] == "blocked" and manual_block_applies_to_stylist(entry, stylist):
             blocked_ranges.append((parse_time(entry["start_time"]), parse_time(entry["end_time"])))
 
     available_slots = []
+    now_in_business_timezone = business_now()
+    is_today = date_str == now_in_business_timezone.strftime("%Y-%m-%d")
+    current_time = parse_time(now_in_business_timezone.strftime("%H:%M"))
+
     for slot in slots:
         slot_time = parse_time(slot)
+        if is_today and slot_time <= current_time:
+            continue
         is_blocked = any(start <= slot_time < end for start, end in blocked_ranges)
         is_booked = any(booking_blocks_slot(booking, date_str, slot, stylist, exclude_booking_id) for booking in bookings)
         if not is_blocked and not is_booked:
@@ -780,9 +821,13 @@ class KyaSalonHandler(BaseHTTPRequestHandler):
             return self.write_json({"error": "CSV content is required"}, status=400)
 
         try:
-            parse_csv_text(csv_text)
+            parsed_entries = parse_csv_text(csv_text)
         except ValueError as exc:
             return self.write_json({"error": str(exc)}, status=400)
+
+        valid_stylists = {ANY_STYLIST, *(item["name"] for item in read_settings().get("stylists", DEFAULT_STYLISTS))}
+        if any((entry.get("stylist") or ANY_STYLIST) not in valid_stylists for entry in parsed_entries):
+            return self.write_json({"error": "Please choose a valid stylist."}, status=400)
 
         normalized = csv_text.replace("\r\n", "\n").strip() + "\n"
         AVAILABILITY_PATH.write_text(normalized, encoding="utf-8")

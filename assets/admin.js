@@ -1,9 +1,11 @@
 const adminState = {
   authenticated: false,
   entries: [],
-  bookings: []
+  bookings: [],
+  confirmedBlocksPage: 1
 };
 const ADMIN_REFRESH_INTERVAL_MS = 15000;
+const CONFIRMED_BLOCKS_PER_PAGE = 6;
 let adminRefreshTimer = null;
 let adminRefreshInFlight = null;
 
@@ -22,15 +24,21 @@ const warning = document.querySelector("[data-admin-warning]");
 const csvSaveButton = document.querySelector("[data-admin-save-csv]");
 const bookingsTarget = document.querySelector("[data-admin-bookings]");
 const confirmedBlocksTarget = document.querySelector("[data-admin-confirmed-blocks]");
+const bookingModal = document.querySelector("[data-booking-modal]");
+const bookingModalTitle = document.querySelector("[data-booking-modal-title]");
+const bookingModalBody = document.querySelector("[data-booking-modal-body]");
 
 const blockForm = document.querySelector("[data-admin-block-form]");
 const rowIndexField = document.querySelector("[data-entry-row-index]");
 const dateField = document.querySelector("[data-entry-date]");
 const statusField = document.querySelector("[data-entry-status]");
+const stylistField = document.querySelector("[data-entry-stylist]");
 const startField = document.querySelector("[data-entry-start]");
 const endField = document.querySelector("[data-entry-end]");
 const reasonField = document.querySelector("[data-entry-reason]");
 const clearEntryButton = document.querySelector("[data-entry-clear]");
+
+const ALL_STYLISTS = "Any available stylist";
 
 function escapeHtml(value) {
   return String(value || "").replace(/[&<>"']/g, (char) => ({
@@ -64,6 +72,10 @@ function statusLabel(status) {
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
+function blockStylistLabel(value) {
+  return !value || value === ALL_STYLISTS ? "All stylists" : value;
+}
+
 function setAdminView() {
   loginCard.hidden = adminState.authenticated;
   dashboard.hidden = !adminState.authenticated;
@@ -79,6 +91,17 @@ function renderHours(settings) {
   }).join("");
 }
 
+function renderBlockStylistOptions(settings) {
+  if (!stylistField) return;
+  const selected = stylistField.value || ALL_STYLISTS;
+  const stylists = settings.stylists || [];
+  stylistField.innerHTML = [
+    `<option value="${ALL_STYLISTS}">All stylists</option>`,
+    ...stylists.map((stylist) => `<option value="${escapeHtml(stylist.name)}">${escapeHtml(stylist.name)} - ${escapeHtml(stylist.level)}</option>`)
+  ].join("");
+  stylistField.value = [...stylistField.options].some((option) => option.value === selected) ? selected : ALL_STYLISTS;
+}
+
 function updateTimeFieldState() {
   const isClosed = statusField.value === "closed";
   startField.disabled = isClosed;
@@ -89,6 +112,7 @@ function clearEntryForm() {
   rowIndexField.value = "";
   blockForm.reset();
   statusField.value = "blocked";
+  stylistField.value = ALL_STYLISTS;
   startField.value = "11:30";
   endField.value = "12:00";
   updateTimeFieldState();
@@ -98,13 +122,14 @@ function renderEntries(entries) {
   adminState.entries = entries;
 
   if (!entries.length) {
-    tableBody.innerHTML = '<tr><td class="admin-empty-state" data-label="Status" colspan="6">No blocked dates or time ranges yet.</td></tr>';
+    tableBody.innerHTML = '<tr><td class="admin-empty-state" data-label="Status" colspan="7">No blocked dates or time ranges yet.</td></tr>';
     return;
   }
 
   tableBody.innerHTML = entries.map((entry) => `
     <tr>
       <td data-label="Date">${entry.date}</td>
+      <td data-label="Stylist">${escapeHtml(blockStylistLabel(entry.stylist))}</td>
       <td data-label="Status">${entry.status}</td>
       <td data-label="Start">${entry.start_time || "-"}</td>
       <td data-label="End">${entry.end_time || "-"}</td>
@@ -137,6 +162,54 @@ function bookingActions(booking) {
   return '<span class="muted">No actions needed</span>';
 }
 
+function groupBookingsByDate(bookings) {
+  return bookings.reduce((acc, booking) => {
+    const date = booking.date || "No date";
+    acc[date] = acc[date] || [];
+    acc[date].push(booking);
+    return acc;
+  }, {});
+}
+
+function countBookingsByStatus(items) {
+  return items.reduce((acc, booking) => {
+    const status = booking.status || "unknown";
+    acc[status] = (acc[status] || 0) + 1;
+    return acc;
+  }, {});
+}
+
+function sortByAppointmentDate(bookings) {
+  return [...bookings].sort((a, b) =>
+    `${a.date || ""}${a.time || ""}${a.createdAt || ""}`.localeCompare(`${b.date || ""}${b.time || ""}${b.createdAt || ""}`)
+  );
+}
+
+function bookingCardsMarkup(items) {
+  return `
+    <div class="booking-card-grid">
+      ${items.map((booking) => `
+        <article class="booking-card status-${escapeHtml(booking.status)}">
+          <div class="booking-card-head">
+            <strong>${escapeHtml(booking.bookingId)}</strong>
+            <span class="status-pill ${escapeHtml(booking.status)}">${escapeHtml(statusLabel(booking.status))}</span>
+          </div>
+          <dl>
+            <div><dt>Client</dt><dd>${escapeHtml(booking.name)}</dd></div>
+            <div><dt>Phone</dt><dd><a href="tel:${escapeHtml(booking.phone)}">${escapeHtml(booking.phone)}</a></dd></div>
+            <div><dt>Service</dt><dd>${escapeHtml(booking.service)}</dd></div>
+            <div><dt>Stylist</dt><dd>${escapeHtml(booking.stylist)}</dd></div>
+            <div><dt>Time</dt><dd>${escapeHtml(labelTime(booking.time))}</dd></div>
+            <div><dt>Remarks</dt><dd>${escapeHtml(booking.remarks || "-")}</dd></div>
+            <div><dt>Hold expires</dt><dd>${escapeHtml(formatDateTime(booking.expiresAt))}</dd></div>
+          </dl>
+          <div class="booking-actions">${bookingActions(booking)}</div>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
 function renderBookings(bookings) {
   adminState.bookings = bookings;
 
@@ -145,53 +218,75 @@ function renderBookings(bookings) {
     return;
   }
 
-  const grouped = bookings.reduce((acc, booking) => {
-    const date = booking.date || "No date";
-    acc[date] = acc[date] || [];
-    acc[date].push(booking);
-    return acc;
-  }, {});
+  const grouped = groupBookingsByDate(bookings);
 
   bookingsTarget.innerHTML = Object.entries(grouped).map(([date, items]) => `
-    <section class="booking-group">
-      <h4>${escapeHtml(date)}</h4>
-      <div class="booking-card-grid">
-        ${items.map((booking) => `
-          <article class="booking-card status-${escapeHtml(booking.status)}">
-            <div class="booking-card-head">
-              <strong>${escapeHtml(booking.bookingId)}</strong>
-              <span class="status-pill ${escapeHtml(booking.status)}">${escapeHtml(statusLabel(booking.status))}</span>
-            </div>
-            <dl>
-              <div><dt>Client</dt><dd>${escapeHtml(booking.name)}</dd></div>
-              <div><dt>Phone</dt><dd><a href="tel:${escapeHtml(booking.phone)}">${escapeHtml(booking.phone)}</a></dd></div>
-              <div><dt>Service</dt><dd>${escapeHtml(booking.service)}</dd></div>
-              <div><dt>Stylist</dt><dd>${escapeHtml(booking.stylist)}</dd></div>
-              <div><dt>Time</dt><dd>${escapeHtml(labelTime(booking.time))}</dd></div>
-              <div><dt>Remarks</dt><dd>${escapeHtml(booking.remarks || "-")}</dd></div>
-              <div><dt>Hold expires</dt><dd>${escapeHtml(formatDateTime(booking.expiresAt))}</dd></div>
-            </dl>
-            <div class="booking-actions">${bookingActions(booking)}</div>
-          </article>
-        `).join("")}
-      </div>
-    </section>
+    ${(() => {
+      const counts = countBookingsByStatus(items);
+      const nextBooking = items.find((booking) => ["pending", "confirmed"].includes(booking.status)) || items[0];
+      return `
+        <button class="booking-date-card" type="button" data-open-bookings data-booking-date="${escapeHtml(date)}">
+          <span class="booking-date-main">
+            <span>
+              <strong>${escapeHtml(date)}</strong>
+              <small>${items.length} booking${items.length === 1 ? "" : "s"}</small>
+            </span>
+            <span class="booking-date-next">${escapeHtml(labelTime(nextBooking.time))}</span>
+          </span>
+          <span class="booking-date-statuses">
+            ${Object.entries(counts).map(([status, count]) => `<span class="status-pill ${escapeHtml(status)}">${count} ${escapeHtml(statusLabel(status))}</span>`).join("")}
+          </span>
+        </button>
+      `;
+    })()}
   `).join("");
 }
 
+function openBookingModal(date) {
+  const items = groupBookingsByDate(adminState.bookings)[date] || [];
+  if (!items.length || !bookingModal || !bookingModalTitle || !bookingModalBody) return;
+
+  bookingModalTitle.textContent = `Bookings for ${date}`;
+  bookingModalBody.innerHTML = bookingCardsMarkup(items);
+  bookingModal.hidden = false;
+  document.body.classList.add("modal-open");
+}
+
+function closeBookingModal() {
+  if (!bookingModal) return;
+  bookingModal.hidden = true;
+  document.body.classList.remove("modal-open");
+}
+
 function renderConfirmedBlocks(bookings) {
-  const confirmed = bookings.filter((booking) => booking.status === "confirmed");
+  const confirmed = sortByAppointmentDate(bookings.filter((booking) => booking.status === "confirmed"));
   if (!confirmed.length) {
     confirmedBlocksTarget.innerHTML = '<div class="admin-empty-panel">No confirmed bookings are blocking slots yet.</div>';
     return;
   }
 
-  confirmedBlocksTarget.innerHTML = confirmed.map((booking) => `
-    <div class="confirmed-block">
-      <strong>${escapeHtml(booking.date)} at ${escapeHtml(labelTime(booking.time))}</strong>
-      <span>${escapeHtml(booking.stylist)} · ${escapeHtml(booking.service)} · ${escapeHtml(booking.bookingId)}</span>
+  const totalPages = Math.ceil(confirmed.length / CONFIRMED_BLOCKS_PER_PAGE);
+  adminState.confirmedBlocksPage = Math.min(Math.max(adminState.confirmedBlocksPage, 1), totalPages);
+  const start = (adminState.confirmedBlocksPage - 1) * CONFIRMED_BLOCKS_PER_PAGE;
+  const pageItems = confirmed.slice(start, start + CONFIRMED_BLOCKS_PER_PAGE);
+
+  confirmedBlocksTarget.innerHTML = `
+    <div class="confirmed-block-list">
+      ${pageItems.map((booking) => `
+        <div class="confirmed-block">
+          <strong>${escapeHtml(booking.date)} at ${escapeHtml(labelTime(booking.time))}</strong>
+          <span>${escapeHtml(booking.stylist)} · ${escapeHtml(booking.service)} · ${escapeHtml(booking.bookingId)}</span>
+        </div>
+      `).join("")}
     </div>
-  `).join("");
+    <div class="admin-pagination">
+      <span>${confirmed.length} confirmed slot${confirmed.length === 1 ? "" : "s"} · Page ${adminState.confirmedBlocksPage} of ${totalPages}</span>
+      <div>
+        <button class="button outline-dark admin-page-button" type="button" data-confirmed-page="prev" ${adminState.confirmedBlocksPage === 1 ? "disabled" : ""}>Previous</button>
+        <button class="button outline-dark admin-page-button" type="button" data-confirmed-page="next" ${adminState.confirmedBlocksPage === totalPages ? "disabled" : ""}>Next</button>
+      </div>
+    </div>
+  `;
 }
 
 async function loadAdminData() {
@@ -215,6 +310,7 @@ async function loadAdminData() {
     renderEntries(payload.entries);
     renderBookings(payload.bookings || []);
     renderConfirmedBlocks(payload.bookings || []);
+    renderBlockStylistOptions(payload.settings);
     renderHours(payload.settings);
     warning.hidden = !payload.config_warning;
   })();
@@ -317,6 +413,7 @@ blockForm?.addEventListener("submit", async (event) => {
   const payload = {
     row_index: rowIndexField.value === "" ? null : Number(rowIndexField.value),
     date: dateField.value,
+    stylist: stylistField.value || ALL_STYLISTS,
     status: statusField.value,
     start_time: statusField.value === "closed" ? "" : startField.value,
     end_time: statusField.value === "closed" ? "" : endField.value,
@@ -353,6 +450,7 @@ tableBody?.addEventListener("click", async (event) => {
   if (action === "edit") {
     rowIndexField.value = String(entry.row_index);
     dateField.value = entry.date;
+    stylistField.value = entry.stylist || ALL_STYLISTS;
     statusField.value = entry.status;
     startField.value = entry.start_time || "11:30";
     endField.value = entry.end_time || "12:00";
@@ -386,7 +484,21 @@ tableBody?.addEventListener("click", async (event) => {
   }
 });
 
-bookingsTarget?.addEventListener("click", async (event) => {
+confirmedBlocksTarget?.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-confirmed-page]");
+  if (!button || button.disabled) return;
+
+  adminState.confirmedBlocksPage += button.dataset.confirmedPage === "next" ? 1 : -1;
+  renderConfirmedBlocks(adminState.bookings);
+});
+
+bookingsTarget?.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-open-bookings]");
+  if (!button) return;
+  openBookingModal(button.dataset.bookingDate);
+});
+
+document.addEventListener("click", async (event) => {
   const button = event.target.closest("button[data-booking-action]");
   if (!button) return;
 
@@ -415,6 +527,19 @@ bookingsTarget?.addEventListener("click", async (event) => {
 
   saveFeedback.textContent = `Booking ${bookingId} updated.`;
   await loadAdminData();
+  if (!bookingModal?.hidden) openBookingModal((adminState.bookings.find((booking) => booking.bookingId === bookingId) || {}).date);
+});
+
+document.addEventListener("click", (event) => {
+  if (event.target.closest("[data-booking-modal-close]")) {
+    closeBookingModal();
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    closeBookingModal();
+  }
 });
 
 fileInput?.addEventListener("change", async () => {

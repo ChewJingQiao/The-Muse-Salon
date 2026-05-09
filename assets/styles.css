@@ -1086,15 +1086,58 @@ p {
 
 .booking-groups {
   display: grid;
-  gap: 22px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
 }
 
-.booking-group h4 {
-  margin: 0 0 12px;
-  color: var(--gold-deep);
-  font-size: .86rem;
-  letter-spacing: .12em;
-  text-transform: uppercase;
+.booking-date-card {
+  display: grid;
+  gap: 14px;
+  width: 100%;
+  min-height: 132px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(255, 250, 242, .82);
+  padding: 16px;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
+}
+
+.booking-date-card:hover {
+  border-color: rgba(201, 164, 93, .58);
+  box-shadow: 0 16px 34px rgba(17, 17, 17, .08);
+  transform: translateY(-1px);
+}
+
+.booking-date-main {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.booking-date-main strong {
+  display: block;
+  font-family: var(--serif);
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.booking-date-main small,
+.booking-date-next {
+  color: var(--muted);
+  font-size: .84rem;
+}
+
+.booking-date-next {
+  white-space: nowrap;
+}
+
+.booking-date-statuses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .booking-card-grid {
@@ -1107,6 +1150,71 @@ p {
   border: 1px solid var(--line);
   background: rgba(255, 250, 242, .82);
   padding: 18px;
+}
+
+.admin-modal[hidden] {
+  display: none;
+}
+
+body.modal-open {
+  overflow: hidden;
+}
+
+.admin-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  padding: 22px;
+}
+
+.admin-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 9, 8, .66);
+}
+
+.admin-modal-panel {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(1040px, 100%);
+  max-height: min(86vh, 860px);
+  border: 1px solid rgba(201, 164, 93, .3);
+  background: var(--paper);
+  box-shadow: var(--shadow);
+}
+
+.admin-modal-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--line);
+  padding: 24px 26px 18px;
+}
+
+.admin-modal-head h2 {
+  font-size: clamp(2rem, 4vw, 3rem);
+}
+
+.admin-modal-close {
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: rgba(255, 250, 242, .86);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.admin-modal-body {
+  overflow: auto;
+  padding: 24px 26px 28px;
 }
 
 .booking-card.status-confirmed {
@@ -1193,6 +1301,11 @@ p {
   gap: 10px;
 }
 
+.confirmed-block-list {
+  display: grid;
+  gap: 10px;
+}
+
 .confirmed-block {
   display: flex;
   align-items: center;
@@ -1205,6 +1318,34 @@ p {
 .confirmed-block span {
   color: var(--muted);
   text-align: right;
+}
+
+.admin-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border-top: 1px solid var(--line);
+  margin-top: 6px;
+  padding-top: 16px;
+  color: var(--muted);
+  font-size: .9rem;
+}
+
+.admin-pagination > div {
+  display: flex;
+  gap: 8px;
+}
+
+.admin-page-button {
+  min-height: 36px;
+  padding: 7px 12px;
+  font-size: .8rem;
+}
+
+.admin-page-button:disabled {
+  cursor: not-allowed;
+  opacity: .42;
 }
 
 .admin-advanced summary {
@@ -1507,6 +1648,7 @@ p {
   .stylist-preview-grid,
   .stylist-feature-grid,
   .admin-grid,
+  .booking-groups,
   .booking-card-grid {
     grid-template-columns: 1fr;
   }
@@ -1547,6 +1689,15 @@ p {
 
   .confirmed-block span {
     text-align: left;
+  }
+
+  .admin-pagination {
+    display: grid;
+  }
+
+  .admin-pagination > div {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .service-row {
@@ -1718,6 +1869,25 @@ p {
 
   .admin-advanced summary {
     font-size: 1.12rem;
+  }
+
+  .booking-date-card {
+    min-height: 116px;
+  }
+
+  .admin-modal {
+    padding: 12px;
+    align-items: end;
+  }
+
+  .admin-modal-panel {
+    max-height: 92vh;
+  }
+
+  .admin-modal-head,
+  .admin-modal-body {
+    padding-left: 18px;
+    padding-right: 18px;
   }
 
   h1 {

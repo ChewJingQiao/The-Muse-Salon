@@ -4,7 +4,7 @@ import { getStore } from "@netlify/blobs";
 const SESSION_COOKIE = "kya_admin_session";
 const SESSION_MAX_AGE_SECONDS = 8 * 60 * 60;
 const STORE_NAME = "kya-booking";
-const FUNCTION_VERSION = "2026-05-09-kya-booking-retention-cleanup";
+const FUNCTION_VERSION = "2026-05-09-kya-booking-no-past-same-day-slots";
 const ENTRIES_KEY = "availability-entries";
 const SETTINGS_KEY = "booking-settings";
 const BOOKINGS_KEY = "bookings";
@@ -51,6 +51,8 @@ const DEFAULT_SETTINGS = {
 };
 
 const DEFAULT_ENTRIES = [];
+const AVAILABILITY_CSV_REQUIRED_FIELDS = new Set(["date", "status", "start_time", "end_time", "reason"]);
+const AVAILABILITY_CSV_ALLOWED_FIELDS = new Set(["date", "status", "start_time", "end_time", "reason", "stylist"]);
 
 const jsonResponse = (status, payload, headers = {}) =>
   new Response(JSON.stringify(payload), {
@@ -141,18 +143,36 @@ function isoNow() {
 }
 
 function businessToday() {
-  if (/^\d{4}-\d{2}-\d{2}$/.test(process.env.KYA_TEST_TODAY || "")) {
-    return process.env.KYA_TEST_TODAY;
-  }
+  return businessNowParts().date;
+}
 
+function businessNowParts() {
+  const testNow = process.env.KYA_TEST_NOW || "";
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(testNow)) {
+    return { date: testNow.slice(0, 10), minutes: parseTime(testNow.slice(11, 16)) };
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(process.env.KYA_TEST_TODAY || "")) {
+    const live = businessNowPartsFromDate(new Date());
+    return { ...live, date: process.env.KYA_TEST_TODAY };
+  }
+  return businessNowPartsFromDate(new Date());
+}
+
+function businessNowPartsFromDate(date) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Kuala_Lumpur",
     year: "numeric",
     month: "2-digit",
-    day: "2-digit"
-  }).formatToParts(new Date());
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(date);
   const get = (type) => parts.find((part) => part.type === type)?.value;
-  return `${get("year")}-${get("month")}-${get("day")}`;
+  return {
+    date: `${get("year")}-${get("month")}-${get("day")}`,
+    minutes: Number(get("hour")) * 60 + Number(get("minute"))
+  };
 }
 
 function addDays(dateString, days) {
@@ -208,6 +228,7 @@ function normalizeBookings(bookings) {
 function normalizeEntry(raw) {
   const date = String(raw.date || "").trim();
   const status = String(raw.status || "").trim().toLowerCase();
+  const stylist = String(raw.stylist || ANY_STYLIST).trim() || ANY_STYLIST;
   let startTime = String(raw.start_time || "").trim();
   let endTime = String(raw.end_time || "").trim();
   const reason = String(raw.reason || "").trim();
@@ -224,14 +245,22 @@ function normalizeEntry(raw) {
     endTime = "";
   }
 
-  return { date, status, start_time: startTime, end_time: endTime, reason };
+  return { date, status, stylist, start_time: startTime, end_time: endTime, reason };
+}
+
+function validateEntryStylist(entry, settings) {
+  const validStylists = new Set([ANY_STYLIST, ...settings.stylists.map((item) => item.name)]);
+  if (!validStylists.has(entry.stylist || ANY_STYLIST)) {
+    throw new Error("Please choose a valid stylist.");
+  }
 }
 
 function entriesToCsv(entries) {
-  const head = "date,status,start_time,end_time,reason";
+  const head = "date,status,start_time,end_time,reason,stylist";
   const lines = entries.map((entry) => {
     const reason = entry.reason.replaceAll(",", " ");
-    return `${entry.date},${entry.status},${entry.start_time},${entry.end_time},${reason}`;
+    const stylist = (entry.stylist || ANY_STYLIST).replaceAll(",", " ");
+    return `${entry.date},${entry.status},${entry.start_time},${entry.end_time},${reason},${stylist}`;
   });
   return [head, ...lines].join("\n") + "\n";
 }
@@ -241,17 +270,26 @@ function parseCsvText(csvText) {
   if (!normalized) return [];
   const lines = normalized.split("\n");
   const header = lines.shift();
-  if (header !== "date,status,start_time,end_time,reason") {
-    throw new Error("CSV header must be exactly: date,status,start_time,end_time,reason");
+  const headers = header.split(",").map((item) => item.trim());
+  const headerSet = new Set(headers);
+  const hasRequired = [...AVAILABILITY_CSV_REQUIRED_FIELDS].every((field) => headerSet.has(field));
+  const hasOnlyAllowed = headers.every((field) => AVAILABILITY_CSV_ALLOWED_FIELDS.has(field));
+  if (!hasRequired || !hasOnlyAllowed) {
+    throw new Error("CSV header must include: date,status,start_time,end_time,reason. Optional: stylist");
   }
 
   const entries = [];
   for (const line of lines) {
     if (!line.trim()) continue;
     const parts = line.split(",");
-    if (parts.length < 5) throw new Error("CSV row is invalid.");
-    const [date, status, start_time, end_time, ...reasonParts] = parts;
-    entries.push(normalizeEntry({ date, status, start_time, end_time, reason: reasonParts.join(",") }));
+    const row = {};
+    headers.forEach((field, index) => {
+      row[field] = parts[index] || "";
+    });
+    if (parts.length > headers.length) {
+      row.reason = [row.reason, ...parts.slice(headers.length)].filter(Boolean).join(",");
+    }
+    entries.push(normalizeEntry(row));
   }
   return entries;
 }
@@ -275,6 +313,14 @@ function expireStaleBookings(bookings) {
 
 function stylistsConflict(left, right) {
   return left === right || left === ANY_STYLIST || right === ANY_STYLIST;
+}
+
+function manualBlockAppliesToStylist(entry, stylist) {
+  const entryStylist = entry.stylist || ANY_STYLIST;
+  const requestedStylist = stylist || ANY_STYLIST;
+  if (entryStylist === ANY_STYLIST) return true;
+  if (requestedStylist === ANY_STYLIST) return false;
+  return entryStylist === requestedStylist;
 }
 
 function bookingBlocksSlot(booking, date, time, stylist, excludeBookingId = "") {
@@ -310,18 +356,20 @@ function buildSlots(date, settings, entries, bookings, stylist = ANY_STYLIST, ex
   if (!hours) return { date, stylist, closed: true, reason: "No business hours configured for this day.", slots: [] };
 
   const sameDate = entries.filter((item) => item.date === date);
-  const closed = sameDate.find((item) => item.status === "closed");
+  const closed = sameDate.find((item) => item.status === "closed" && manualBlockAppliesToStylist(item, stylist));
   if (closed) return { date, stylist, closed: true, reason: closed.reason || "Unavailable on this date.", slots: [] };
 
   const open = parseTime(hours.open);
   const close = parseTime(hours.close);
   const step = Number(settings.slotDurationMinutes || 30);
   const blockedRanges = sameDate
-    .filter((item) => item.status === "blocked")
+    .filter((item) => item.status === "blocked" && manualBlockAppliesToStylist(item, stylist))
     .map((item) => [parseTime(item.start_time), parseTime(item.end_time)]);
+  const now = businessNowParts();
 
   const slots = [];
   for (let cursor = open; cursor + step <= close; cursor += step) {
+    if (date === now.date && cursor <= now.minutes) continue;
     const blocked = blockedRanges.some(([start, end]) => cursor >= start && cursor < end);
     if (blocked) continue;
     const hh = Math.floor(cursor / 60);
@@ -578,6 +626,7 @@ export default async (req, context) => {
     if (method === "POST" && route === "admin/upload-csv") {
       const body = await req.json();
       const parsed = parseCsvText(body.csv_text || "");
+      parsed.forEach((entry) => validateEntryStylist(entry, settings));
       await store.setJSON(ENTRIES_KEY, parsed);
       return jsonResponse(200, { ok: true });
     }
@@ -585,6 +634,7 @@ export default async (req, context) => {
     if (method === "POST" && route === "admin/save-entry") {
       const body = await req.json();
       const entry = normalizeEntry(body);
+      validateEntryStylist(entry, settings);
       const rowIndex = body.row_index;
       const next = [...entries];
       if (rowIndex === null || rowIndex === undefined || rowIndex === "") {

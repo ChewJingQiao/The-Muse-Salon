@@ -1,5 +1,5 @@
-date,status,start_time,end_time,reason
-2026-05-20,closed,,,Salon closed for training
-2026-05-12,blocked,13:00,14:30,Lunch / private appointment
-2026-05-17,blocked,16:00,17:00,Staff unavailable
-2026-05-23,blocked,11:30,12:30,Reserved slot
+date,status,start_time,end_time,reason,stylist
+2026-05-20,closed,,,Salon closed for training,Any available stylist
+2026-05-12,blocked,13:00,14:30,Lunch / private appointment,Any available stylist
+2026-05-17,blocked,16:00,17:00,Staff unavailable,Aria Lim
+2026-05-23,blocked,11:30,12:30,Reserved slot,Nova Lee

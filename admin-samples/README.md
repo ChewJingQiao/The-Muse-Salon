@@ -20,6 +20,7 @@ How staff can use it:
 3. Add a block directly in the form:
    - choose a date
    - choose `Block time range` or `Closed whole day`
+   - choose whether the block applies to all stylists or one specific stylist
    - add optional reason
 4. Click `Save Block`
 5. Use `Edit` or `Delete` in the table when needed
@@ -40,6 +41,7 @@ CSV rules:
 - Time format must be `HH:MM` in 24-hour format
 - `blocked` rows must include both `start_time` and `end_time`
 - `closed` rows block the whole day, so `start_time` and `end_time` can be left empty
+- `stylist` is optional for older CSV files; leave it empty or use `Any available stylist` to block everyone
 
 `availability.sample.csv`
 
@@ -54,23 +56,27 @@ CSV columns:
 - `start_time`
 - `end_time`
 - `reason`
+- `stylist`
 
 Column name notes:
 
 - These column names must exist in the CSV
 - They can be in a different order and the system will still read them
-- Extra columns are not supported in the current lightweight version
+- The optional `stylist` column can be omitted in older files
+- Extra columns other than `stylist` are not supported in the current lightweight version
 
 Status rules:
 
 - `closed` blocks the full day
 - `blocked` blocks only the time range between `start_time` and `end_time`
+- `Any available stylist` means the block applies to every stylist
+- A stylist name such as `Aria Lim` blocks only that stylist
 
 Example:
 
 ```csv
-date,status,start_time,end_time,reason
-2026-05-20,closed,,,Salon closed for training
-2026-05-12,blocked,13:00,14:30,Lunch / private appointment
-2026-05-17,blocked,16:00,17:00,Staff unavailable
+date,status,start_time,end_time,reason,stylist
+2026-05-20,closed,,,Salon closed for training,Any available stylist
+2026-05-12,blocked,13:00,14:30,Lunch / private appointment,Any available stylist
+2026-05-17,blocked,16:00,17:00,Staff unavailable,Aria Lim
 ```
