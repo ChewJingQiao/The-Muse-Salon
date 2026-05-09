@@ -4,12 +4,13 @@ import { getStore } from "@netlify/blobs";
 const SESSION_COOKIE = "kya_admin_session";
 const SESSION_MAX_AGE_SECONDS = 8 * 60 * 60;
 const STORE_NAME = "kya-booking";
-const FUNCTION_VERSION = "2026-05-09-kya-booking-strong-consistency";
+const FUNCTION_VERSION = "2026-05-09-kya-booking-retention-cleanup";
 const ENTRIES_KEY = "availability-entries";
 const SETTINGS_KEY = "booking-settings";
 const BOOKINGS_KEY = "bookings";
 const ANY_STYLIST = "Any available stylist";
 const HOLD_MINUTES = 10;
+const RECORD_RETENTION_DAYS_AFTER_DATE = 1;
 const DAY_ORDER = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 
 const DEFAULT_SERVICES = [
@@ -137,6 +138,35 @@ function labelTime(value) {
 
 function isoNow() {
   return new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
+}
+
+function businessToday() {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(process.env.KYA_TEST_TODAY || "")) {
+    return process.env.KYA_TEST_TODAY;
+  }
+
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kuala_Lumpur",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(new Date());
+  const get = (type) => parts.find((part) => part.type === type)?.value;
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
+function addDays(dateString, days) {
+  const date = new Date(`${dateString}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function cleanupCutoffDate() {
+  return addDays(businessToday(), -RECORD_RETENTION_DAYS_AFTER_DATE);
+}
+
+function isRecordPastRetention(dateString) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(dateString || "") && dateString < cleanupCutoffDate();
 }
 
 function addMinutes(date, minutes) {
@@ -364,6 +394,19 @@ async function getStoreData() {
     bookings = [];
     await store.setJSON(BOOKINGS_KEY, bookings);
   }
+
+  const keptEntries = entries.filter((entry) => !isRecordPastRetention(entry.date));
+  if (keptEntries.length !== entries.length) {
+    entries = keptEntries;
+    await store.setJSON(ENTRIES_KEY, entries);
+  }
+
+  const keptBookings = bookings.filter((booking) => !isRecordPastRetention(booking.date));
+  if (keptBookings.length !== bookings.length) {
+    bookings = keptBookings;
+    await store.setJSON(BOOKINGS_KEY, bookings);
+  }
+
   await store.setJSON(SETTINGS_KEY, settings);
   if (expireStaleBookings(bookings)) await store.setJSON(BOOKINGS_KEY, bookings);
 

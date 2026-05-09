@@ -23,6 +23,7 @@ ADMIN_CONFIG_SAMPLE_PATH = BASE_DIR / "admin-config.sample.json"
 ADMIN_COOKIE_NAME = "kya_admin_session"
 ANY_STYLIST = "Any available stylist"
 HOLD_MINUTES = 10
+RECORD_RETENTION_DAYS_AFTER_DATE = 1
 BOOKING_STATUSES = {"pending", "confirmed", "cancelled", "expired"}
 DEFAULT_SERVICES = [
     "Haircut & Styling",
@@ -135,6 +136,25 @@ def utc_now():
     return datetime.utcnow().replace(microsecond=0)
 
 
+def business_today():
+    override = os.environ.get("KYA_TEST_TODAY", "").strip()
+    if override:
+        return datetime.strptime(override, "%Y-%m-%d").date()
+    return (utc_now() + timedelta(hours=8)).date()
+
+
+def record_cleanup_cutoff_date():
+    return business_today() - timedelta(days=RECORD_RETENTION_DAYS_AFTER_DATE)
+
+
+def is_record_past_retention(date_str):
+    try:
+        record_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return False
+    return record_date < record_cleanup_cutoff_date()
+
+
 def isoformat_utc(value):
     return value.replace(microsecond=0).isoformat() + "Z"
 
@@ -152,6 +172,10 @@ def read_bookings():
 
     bookings = json.loads(BOOKINGS_PATH.read_text(encoding="utf-8") or "[]")
     changed = expire_stale_bookings(bookings)
+    kept_bookings = [booking for booking in bookings if not is_record_past_retention(booking.get("date"))]
+    if len(kept_bookings) != len(bookings):
+        bookings = kept_bookings
+        changed = True
     if changed:
         write_bookings(bookings)
     return bookings
@@ -271,6 +295,11 @@ def parse_csv_text(csv_text):
 def read_availability_entries():
     csv_text = AVAILABILITY_PATH.read_text(encoding="utf-8")
     entries = parse_csv_text(csv_text)
+    kept_entries = [entry for entry in entries if not is_record_past_retention(entry.get("date"))]
+    if len(kept_entries) != len(entries):
+        entries = kept_entries
+        write_availability_entries(entries)
+        csv_text = AVAILABILITY_PATH.read_text(encoding="utf-8")
     return csv_text, entries
 
 
