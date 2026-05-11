@@ -23,6 +23,7 @@ ADMIN_CONFIG_SAMPLE_PATH = BASE_DIR / "admin-config.sample.json"
 ADMIN_COOKIE_NAME = "kya_admin_session"
 ANY_STYLIST = "Any available stylist"
 HOLD_MINUTES = 10
+MAX_ADVANCE_BOOKING_DAYS = 60
 RECORD_RETENTION_DAYS_AFTER_DATE = 1
 BOOKING_STATUSES = {"pending", "confirmed", "cancelled", "expired"}
 DEFAULT_SERVICES = [
@@ -141,6 +142,10 @@ def read_settings():
     return settings
 
 
+def write_settings(settings):
+    SETTINGS_PATH.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
+
+
 def read_admin_config():
     return read_json(ADMIN_CONFIG_PATH)
 
@@ -173,6 +178,22 @@ def is_record_past_retention(date_str):
     except (TypeError, ValueError):
         return False
     return record_date < record_cleanup_cutoff_date()
+
+
+def max_booking_date():
+    return business_today() + timedelta(days=MAX_ADVANCE_BOOKING_DAYS)
+
+
+def validate_booking_window(date_str):
+    try:
+        booking_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Date must be in YYYY-MM-DD format.") from exc
+    if booking_date < business_today():
+        raise ValueError("Please choose today or a future date.")
+    if booking_date > max_booking_date():
+        raise ValueError(f"Appointments can only be booked up to {MAX_ADVANCE_BOOKING_DAYS} days in advance.")
+    return booking_date
 
 
 def isoformat_utc(value):
@@ -278,6 +299,43 @@ def booking_for_admin(booking):
     return item
 
 
+def phone_digits(value):
+    return re.sub(r"\D", "", str(value or ""))
+
+
+def is_valid_phone_input(value):
+    raw = str(value or "").strip()
+    digits = phone_digits(raw)
+    return bool(re.fullmatch(r"[\d\s()+-]+", raw)) and 8 <= len(digits) <= 15
+
+
+def phone_matches(stored_phone, submitted_phone):
+    if not is_valid_phone_input(submitted_phone):
+        return False
+    stored_digits = phone_digits(stored_phone)
+    submitted_digits = phone_digits(submitted_phone)
+    return (
+        stored_digits == submitted_digits
+        or stored_digits.endswith(submitted_digits)
+        or submitted_digits.endswith(stored_digits)
+    )
+
+
+def booking_for_customer(booking):
+    return {
+        "bookingId": booking.get("bookingId") or booking.get("id"),
+        "status": booking.get("status"),
+        "service": booking.get("service"),
+        "stylist": booking.get("stylist"),
+        "date": booking.get("date"),
+        "time": booking.get("time"),
+        "name": booking.get("name"),
+        "expiresAt": booking.get("expiresAt"),
+        "confirmedAt": booking.get("confirmedAt"),
+        "cancelledAt": booking.get("cancelledAt"),
+    }
+
+
 def sort_bookings(bookings):
     return sorted(bookings, key=lambda item: (item.get("date", ""), item.get("time", ""), item.get("createdAt", "")))
 
@@ -366,6 +424,51 @@ def write_availability_entries(entries):
     AVAILABILITY_PATH.write_text("\n".join(output) + "\n", encoding="utf-8")
 
 
+def export_payload(export_type):
+    csv_text, entries = read_availability_entries()
+    bookings = sort_bookings(read_bookings())
+    settings = read_settings()
+    stamp = business_today().isoformat()
+
+    if export_type == "bookings":
+        return {
+            "label": "Bookings backup",
+            "filename": f"kya-bookings-{stamp}.json",
+            "contentType": "application/json",
+            "content": json.dumps(bookings, indent=2)
+        }
+    if export_type == "blocks":
+        return {
+            "label": "Blocked times backup",
+            "filename": f"kya-blocked-times-{stamp}.csv",
+            "contentType": "text/csv",
+            "content": csv_text
+        }
+    if export_type == "settings":
+        return {
+            "label": "Settings backup",
+            "filename": f"kya-settings-{stamp}.json",
+            "contentType": "application/json",
+            "content": json.dumps(settings, indent=2)
+        }
+    if export_type == "all":
+        return {
+            "label": "Full backup",
+            "filename": f"kya-full-backup-{stamp}.json",
+            "contentType": "application/json",
+            "content": json.dumps(
+                {
+                    "exportedAt": isoformat_utc(utc_now()),
+                    "settings": settings,
+                    "bookings": bookings,
+                    "availabilityEntries": entries
+                },
+                indent=2
+            )
+        }
+    raise ValueError("Export type must be all, bookings, blocks, or settings.")
+
+
 def validate_entry_payload(payload):
     date = (payload.get("date") or "").strip()
     status = (payload.get("status") or "").strip().lower()
@@ -409,6 +512,76 @@ def validate_entry_payload(payload):
     }
 
 
+def validate_settings_payload(payload):
+    try:
+        slot_duration = int(payload.get("slotDurationMinutes", 30))
+        hold_minutes = int(payload.get("holdMinutes", HOLD_MINUTES))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Slot interval and hold duration must be numbers.") from exc
+
+    if slot_duration < 15 or slot_duration > 120:
+        raise ValueError("Slot interval must be between 15 and 120 minutes.")
+    if hold_minutes < 1 or hold_minutes > 240:
+        raise ValueError("Pending hold must be between 1 and 240 minutes.")
+
+    services = [str(item).strip() for item in payload.get("services", []) if str(item).strip()]
+    if not services:
+        raise ValueError("Add at least one service.")
+    if len(set(services)) != len(services):
+        raise ValueError("Service names must be unique.")
+
+    durations = payload.get("serviceDurations", {})
+    service_durations = {}
+    for service in services:
+        try:
+            duration = int(durations.get(service, slot_duration))
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"Duration for {service} must be a number.") from exc
+        if duration < 15 or duration > 480:
+            raise ValueError(f"Duration for {service} must be between 15 and 480 minutes.")
+        service_durations[service] = duration
+
+    stylists = []
+    seen_stylists = set()
+    for item in payload.get("stylists", []):
+        name = str(item.get("name", "")).strip()
+        level = str(item.get("level", "")).strip()
+        if not name or not level:
+            raise ValueError("Each stylist needs a name and level.")
+        if name in seen_stylists:
+            raise ValueError("Stylist names must be unique.")
+        seen_stylists.add(name)
+        stylists.append({"name": name, "level": level})
+    if not stylists:
+        raise ValueError("Add at least one stylist.")
+
+    weekly_hours = {}
+    source_hours = payload.get("weeklyHours", {})
+    for day in ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]:
+        day_hours = source_hours.get(day, {})
+        open_time = str(day_hours.get("open", "")).strip()
+        close_time = str(day_hours.get("close", "")).strip()
+        if not open_time or not close_time:
+            raise ValueError(f"Opening hours are required for {day}.")
+        if parse_time(open_time) >= parse_time(close_time):
+            raise ValueError(f"Closing time must be after opening time for {day}.")
+        weekly_hours[day] = {"open": open_time, "close": close_time}
+
+    settings = read_settings()
+    settings.update(
+        {
+            "slotDurationMinutes": slot_duration,
+            "holdMinutes": hold_minutes,
+            "services": services,
+            "serviceDurations": service_durations,
+            "stylists": stylists,
+            "weeklyHours": weekly_hours,
+            "timezone": settings.get("timezone", "Asia/Kuala_Lumpur"),
+        }
+    )
+    return settings
+
+
 def validate_booking_payload(payload):
     settings = read_settings()
     service = (payload.get("service") or "").strip()
@@ -440,16 +613,12 @@ def validate_booking_payload(payload):
     if stylist not in valid_stylists:
         raise ValueError("Please choose a valid stylist.")
 
-    try:
-        datetime.strptime(date, "%Y-%m-%d")
-    except ValueError as exc:
-        raise ValueError("Date must be in YYYY-MM-DD format.") from exc
+    validate_booking_window(date)
 
     parse_time(time)
 
-    phone_digits = re.sub(r"\D", "", phone)
-    if len(phone_digits) < 8 or len(phone_digits) > 15:
-        raise ValueError("Please enter a valid phone number.")
+    if not is_valid_phone_input(phone):
+        raise ValueError("Please enter a valid phone number using digits, spaces, +, -, or brackets only.")
 
     return {
         "service": service,
@@ -503,6 +672,31 @@ def generate_slots_for_date(date_str, stylist=ANY_STYLIST, service=None, duratio
     bookings = read_bookings()
 
     date_obj = datetime.strptime(date_str, "%Y-%m-%d")
+    booking_date = date_obj.date()
+    if booking_date < business_today():
+        return {
+            "date": date_str,
+            "stylist": stylist or ANY_STYLIST,
+            "service": service or "",
+            "serviceDurationMinutes": get_service_duration(settings, service, duration_override_minutes),
+            "closed": True,
+            "reason": "Please choose today or a future date.",
+            "bookingWindowDays": MAX_ADVANCE_BOOKING_DAYS,
+            "maxBookingDate": max_booking_date().isoformat(),
+            "slots": []
+        }
+    if booking_date > max_booking_date():
+        return {
+            "date": date_str,
+            "stylist": stylist or ANY_STYLIST,
+            "service": service or "",
+            "serviceDurationMinutes": get_service_duration(settings, service, duration_override_minutes),
+            "closed": True,
+            "reason": f"Appointments can only be booked up to {MAX_ADVANCE_BOOKING_DAYS} days in advance.",
+            "bookingWindowDays": MAX_ADVANCE_BOOKING_DAYS,
+            "maxBookingDate": max_booking_date().isoformat(),
+            "slots": []
+        }
     weekday = date_obj.strftime("%A").lower()
     hours = settings["weeklyHours"].get(weekday)
     slot_duration = int(settings.get("slotDurationMinutes", 30))
@@ -584,6 +778,8 @@ def generate_slots_for_date(date_str, stylist=ANY_STYLIST, service=None, duratio
         "serviceDurationMinutes": service_duration,
         "closed": False,
         "reason": "",
+        "bookingWindowDays": MAX_ADVANCE_BOOKING_DAYS,
+        "maxBookingDate": max_booking_date().isoformat(),
         "slots": available_slots
     }
 
@@ -629,6 +825,8 @@ class KyaSalonHandler(BaseHTTPRequestHandler):
             return self.handle_admin_status()
         if path == "/api/admin/availability":
             return self.handle_admin_availability()
+        if path == "/api/admin/export":
+            return self.handle_admin_export(parsed.query)
         if path == "/":
             return self.serve_static("index.html")
 
@@ -647,8 +845,12 @@ class KyaSalonHandler(BaseHTTPRequestHandler):
             return self.handle_admin_save_entry()
         if parsed.path == "/api/admin/delete-entry":
             return self.handle_admin_delete_entry()
+        if parsed.path == "/api/admin/save-settings":
+            return self.handle_admin_save_settings()
         if parsed.path == "/api/bookings":
             return self.handle_create_booking()
+        if parsed.path == "/api/booking-status":
+            return self.handle_booking_status()
         if parsed.path == "/api/admin/update-booking-status":
             return self.handle_admin_update_booking_status()
         if parsed.path == "/api/admin/update-booking-note":
@@ -776,6 +978,17 @@ class KyaSalonHandler(BaseHTTPRequestHandler):
             }
         )
 
+    def handle_admin_export(self, query_string):
+        if not is_authenticated(self):
+            return self.write_json({"error": "Unauthorized"}, status=401)
+
+        params = parse_qs(query_string)
+        export_type = (params.get("type", ["all"])[0] or "all").strip()
+        try:
+            return self.write_json(export_payload(export_type))
+        except ValueError as exc:
+            return self.write_json({"error": str(exc)}, status=400)
+
     def handle_create_booking(self):
         try:
             payload = validate_booking_payload(self.read_json_body())
@@ -823,6 +1036,26 @@ class KyaSalonHandler(BaseHTTPRequestHandler):
         bookings.append(booking)
         write_bookings(bookings)
         return self.write_json({"ok": True, "booking": booking, "holdMinutes": hold_minutes}, status=201)
+
+    def handle_booking_status(self):
+        payload = self.read_json_body()
+        booking_id = (payload.get("bookingId") or payload.get("id") or "").strip().upper()
+        phone = payload.get("phone") or ""
+
+        if not booking_id or not is_valid_phone_input(phone):
+            return self.write_json({"error": "Please enter a valid phone number using digits, spaces, +, -, or brackets only."}, status=400)
+
+        booking = next(
+            (
+                item for item in read_bookings()
+                if (item.get("bookingId") or item.get("id") or "").upper() == booking_id
+            ),
+            None,
+        )
+        if not booking or not phone_matches(booking.get("phone"), phone):
+            return self.write_json({"error": "No booking matched those details."}, status=404)
+
+        return self.write_json({"ok": True, "booking": booking_for_customer(booking)})
 
     def handle_admin_update_booking_status(self):
         if not is_authenticated(self):
@@ -934,6 +1167,18 @@ class KyaSalonHandler(BaseHTTPRequestHandler):
         booking["noteUpdatedAt"] = isoformat_utc(utc_now())
         write_bookings(bookings)
         return self.write_json({"ok": True, "booking": booking_for_admin(booking)})
+
+    def handle_admin_save_settings(self):
+        if not is_authenticated(self):
+            return self.write_json({"error": "Unauthorized"}, status=401)
+
+        try:
+            settings = validate_settings_payload(self.read_json_body())
+        except ValueError as exc:
+            return self.write_json({"error": str(exc)}, status=400)
+
+        write_settings(settings)
+        return self.write_json({"ok": True, "settings": settings})
 
     def handle_admin_upload_csv(self):
         if not is_authenticated(self):

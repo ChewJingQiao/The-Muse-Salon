@@ -39,7 +39,7 @@
                 <div class="field"><label for="phone">Phone</label><input id="phone" name="phone" autocomplete="tel" inputmode="tel" placeholder="+60..." required></div>
                 <div class="field full"><label for="remarks">Remarks</label><textarea id="remarks" name="remarks" placeholder="Share your hair goal, current condition or any timing notes."></textarea></div>
                 <p class="form-note" data-availability-feedback>Choose a stylist and date to view available appointment times.</p>
-                <p class="form-note">Your slot is temporarily held after submission. Please confirm through WhatsApp within 10 minutes.</p>
+                <p class="form-note">Bookings are open up to 60 days ahead. Your slot is temporarily held after submission, then confirmed through WhatsApp within 10 minutes.</p>
                 <button class="button dark" type="submit">Create Pending Booking</button>
               </form>
             </div>
@@ -53,6 +53,17 @@
                 <button class="button outline-dark" type="button" data-booking-copy>Copy Booking Details</button>
                 <button class="button outline-dark" type="button" data-booking-new>Make Another Booking</button>
               </div>
+            </div>
+            <div class="booking-status-panel">
+              <p class="eyebrow">Check Status</p>
+              <h3>Already booked?</h3>
+              <p class="muted">Enter your booking ID and phone number to check whether your appointment is pending, confirmed, cancelled or expired.</p>
+              <form class="contact-form booking-status-form" data-booking-status-form>
+                <div class="field"><label for="status-booking-id">Booking ID</label><div class="prefixed-input"><span>KYA-</span><input id="status-booking-id" name="bookingId" placeholder="XXXX" autocomplete="off" maxlength="4" data-booking-id-suffix required></div></div>
+                <div class="field"><label for="status-phone">Phone</label><input id="status-phone" name="phone" inputmode="tel" autocomplete="tel" placeholder="+60..." required></div>
+                <button class="button outline-dark" type="submit">Check Appointment</button>
+              </form>
+              <div class="booking-status-result" data-booking-status-result hidden></div>
             </div>
           </section>
         </div></section>

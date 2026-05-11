@@ -67,134 +67,207 @@
 
               <div class="admin-alert" data-admin-alert role="status" aria-live="polite" hidden></div>
 
-              <div class="admin-summary-grid" data-admin-summary></div>
-
-              <details class="admin-card admin-info-card">
-                <summary>Service duration defaults</summary>
-                <div class="admin-info-grid">
-                  <div><h3>Cut & Styling</h3><p class="muted">Haircut & Styling: 60 min<br>Wash & Blow: 45 min</p></div>
-                  <div><h3>Colour & Texture</h3><p class="muted">Hair Coloring: 150 min<br>Rebonding / Smoothing: 180 min<br>Perm: 150 min</p></div>
-                  <div><h3>Treatment & Care</h3><p class="muted">Hair Treatment: 90 min<br>Scalp Care: 60 min</p><p class="muted">Staff can override the duration inside each booking before confirming when a client needs more or less time.</p></div>
-                </div>
-              </details>
-
-              <div class="admin-card">
-                <div class="admin-section-title">
-                  <div>
-                    <p class="eyebrow">Customer Bookings</p>
-                    <h3>Bookings by date</h3>
-                  </div>
-                  <p class="muted">Pending slots are held for 10 minutes. Confirmed bookings permanently block the stylist and time slot.</p>
-                </div>
-                <div class="admin-filter-bar">
-                  <div class="field">
-                    <label for="booking-status-filter">Status</label>
-                    <select id="booking-status-filter" data-booking-filter-status>
-                      <option value="all">All bookings</option>
-                      <option value="pending">Pending</option>
-                      <option value="confirmed">Confirmed</option>
-                      <option value="cancelled">Cancelled</option>
-                      <option value="expired">Expired</option>
-                    </select>
-                  </div>
-                  <div class="field">
-                    <label for="booking-from-filter">From</label>
-                    <input id="booking-from-filter" type="date" data-booking-filter-from>
-                  </div>
-                  <div class="field">
-                    <label for="booking-to-filter">To</label>
-                    <input id="booking-to-filter" type="date" data-booking-filter-to>
-                  </div>
-                  <button class="button outline-dark" type="button" data-booking-filter-clear>Clear Filters</button>
-                </div>
-                <div class="booking-groups" data-admin-bookings></div>
+              <div class="admin-tabs" role="tablist" aria-label="Admin sections">
+                <button class="admin-tab is-active" type="button" role="tab" aria-selected="true" data-admin-tab-button="bookings">Bookings</button>
+                <button class="admin-tab" type="button" role="tab" aria-selected="false" data-admin-tab-button="blocking">Blocking</button>
+                <button class="admin-tab" type="button" role="tab" aria-selected="false" data-admin-tab-button="settings">Settings</button>
+                <button class="admin-tab" type="button" role="tab" aria-selected="false" data-admin-tab-button="backup">Backup</button>
               </div>
 
-              <div class="admin-card">
-                <div class="admin-section-title">
-                  <div>
-                    <p class="eyebrow">Blocked by Bookings</p>
-                    <h3>Confirmed appointment slots</h3>
-                  </div>
-                </div>
-                <div class="confirmed-blocks" data-admin-confirmed-blocks></div>
-              </div>
+              <section class="admin-tab-panel" data-admin-panel="bookings">
+                <div class="admin-summary-grid" data-admin-summary></div>
 
-              <div class="admin-grid">
+                <details class="admin-card admin-info-card">
+                  <summary>Service duration defaults</summary>
+                  <div class="admin-info-grid">
+                    <div><h3>Cut & Styling</h3><p class="muted">Haircut & Styling: 60 min<br>Wash & Blow: 45 min</p></div>
+                    <div><h3>Colour & Texture</h3><p class="muted">Hair Coloring: 150 min<br>Rebonding / Smoothing: 180 min<br>Perm: 150 min</p></div>
+                    <div><h3>Treatment & Care</h3><p class="muted">Hair Treatment: 90 min<br>Scalp Care: 60 min</p><p class="muted">Staff can override the duration inside each booking before confirming when a client needs more or less time.</p></div>
+                  </div>
+                </details>
+
                 <div class="admin-card">
-                  <p class="eyebrow">Manual Blocking</p>
-                  <h3>Add or edit a block</h3>
-                  <form class="admin-block-form" data-admin-block-form>
-                    <input type="hidden" data-entry-row-index>
+                  <div class="admin-section-title">
+                    <div>
+                      <p class="eyebrow">Customer Bookings</p>
+                      <h3>Bookings by date</h3>
+                    </div>
+                    <p class="muted">Pending slots are held for 10 minutes. Confirmed bookings permanently block the stylist and time slot.</p>
+                  </div>
+                  <div class="admin-filter-bar">
                     <div class="field">
-                      <label for="block-date">Date</label>
-                      <input id="block-date" type="date" data-entry-date required>
+                      <label for="booking-search-filter">Search</label>
+                      <input id="booking-search-filter" type="search" placeholder="Name, phone, booking ID..." data-booking-filter-search>
                     </div>
                     <div class="field">
-                      <label for="block-status">Type</label>
-                      <select id="block-status" data-entry-status>
-                        <option value="blocked">Block time range</option>
-                        <option value="closed">Closed whole day</option>
-                      </select>
-                    </div>
-                    <div class="field full">
-                      <label for="block-stylist">Applies to</label>
-                      <select id="block-stylist" data-entry-stylist>
-                        <option value="Any available stylist">All stylists</option>
+                      <label for="booking-status-filter">Status</label>
+                      <select id="booking-status-filter" data-booking-filter-status>
+                        <option value="all">All bookings</option>
+                        <option value="pending">Pending</option>
+                        <option value="confirmed">Confirmed</option>
+                        <option value="cancelled">Cancelled</option>
+                        <option value="expired">Expired</option>
                       </select>
                     </div>
                     <div class="field">
-                      <label for="block-start">Start time</label>
-                      <input id="block-start" type="time" data-entry-start value="11:30">
+                      <label for="booking-from-filter">From</label>
+                      <input id="booking-from-filter" type="date" data-booking-filter-from>
                     </div>
                     <div class="field">
-                      <label for="block-end">End time</label>
-                      <input id="block-end" type="time" data-entry-end value="12:00">
+                      <label for="booking-to-filter">To</label>
+                      <input id="booking-to-filter" type="date" data-booking-filter-to>
                     </div>
-                    <div class="field full">
-                      <label for="block-reason">Reason (optional)</label>
-                      <input id="block-reason" type="text" data-entry-reason placeholder="Lunch break, private booking, off-site event...">
-                    </div>
-                    <div class="admin-actions">
-                      <button class="button dark" type="submit" data-entry-save>Save Block</button>
-                      <button class="button outline-dark" type="button" data-entry-clear>Clear</button>
-                    </div>
-                  </form>
-                  <p class="admin-feedback" data-admin-save-feedback></p>
+                    <button class="button outline-dark" type="button" data-booking-filter-clear>Clear Filters</button>
+                  </div>
+                  <div class="booking-groups" data-admin-bookings></div>
                 </div>
 
                 <div class="admin-card">
-                  <h3>Current opening hours</h3>
-                  <div class="admin-hours" data-admin-hours></div>
-                  <p class="muted">Choose “All stylists” for salon-wide blocks, or select one stylist for personal leave and private holds.</p>
+                  <div class="admin-section-title">
+                    <div>
+                      <p class="eyebrow">Blocked by Bookings</p>
+                      <h3>Confirmed appointment slots</h3>
+                    </div>
+                  </div>
+                  <div class="confirmed-blocks" data-admin-confirmed-blocks></div>
                 </div>
-              </div>
+              </section>
 
-              <div class="admin-card">
-                <h3>Current blocked entries</h3>
-                <div class="admin-table-wrap">
-                  <table class="admin-table">
-                    <thead>
-                      <tr><th>Date</th><th>Stylist</th><th>Status</th><th>Start</th><th>End</th><th>Reason</th><th>Actions</th></tr>
-                    </thead>
-                    <tbody data-admin-table-body></tbody>
-                  </table>
-                </div>
-              </div>
+              <section class="admin-tab-panel" data-admin-panel="blocking" hidden>
+                <div class="admin-grid">
+                  <div class="admin-card">
+                    <p class="eyebrow">Manual Blocking</p>
+                    <h3>Add or edit a block</h3>
+                    <form class="admin-block-form" data-admin-block-form>
+                      <input type="hidden" data-entry-row-index>
+                      <div class="field">
+                        <label for="block-date">Date</label>
+                        <input id="block-date" type="date" data-entry-date required>
+                      </div>
+                      <div class="field">
+                        <label for="block-status">Type</label>
+                        <select id="block-status" data-entry-status>
+                          <option value="blocked">Block time range</option>
+                          <option value="closed">Closed whole day</option>
+                        </select>
+                      </div>
+                      <div class="field full">
+                        <label for="block-stylist">Applies to</label>
+                        <select id="block-stylist" data-entry-stylist>
+                          <option value="Any available stylist">All stylists</option>
+                        </select>
+                      </div>
+                      <div class="field">
+                        <label for="block-start">Start time</label>
+                        <input id="block-start" type="time" data-entry-start value="11:30">
+                      </div>
+                      <div class="field">
+                        <label for="block-end">End time</label>
+                        <input id="block-end" type="time" data-entry-end value="12:00">
+                      </div>
+                      <div class="field full">
+                        <label for="block-reason">Reason (optional)</label>
+                        <input id="block-reason" type="text" data-entry-reason placeholder="Lunch break, private booking, off-site event...">
+                      </div>
+                      <div class="admin-actions">
+                        <button class="button dark" type="submit" data-entry-save>Save Block</button>
+                        <button class="button outline-dark" type="button" data-entry-clear>Clear</button>
+                      </div>
+                    </form>
+                    <p class="admin-feedback" data-admin-save-feedback></p>
+                  </div>
 
-              <details class="admin-card admin-advanced">
-                <summary>Advanced: CSV import/export view</summary>
-                <p class="muted">This is optional. Daily operations should use the direct form above.</p>
-                <div class="field">
-                  <label for="csv-file">Upload CSV from Excel</label>
-                  <input id="csv-file" type="file" accept=".csv" data-admin-file>
+                  <div class="admin-card">
+                    <h3>Current opening hours</h3>
+                    <div class="admin-hours" data-admin-hours></div>
+                    <p class="muted">Choose “All stylists” for salon-wide blocks, or select one stylist for personal leave and private holds.</p>
+                  </div>
                 </div>
-                <div class="field full">
-                  <label for="csv-editor">Current CSV</label>
-                  <textarea id="csv-editor" data-admin-csv-editor></textarea>
+
+                <div class="admin-card">
+                  <h3>Current blocked entries</h3>
+                  <div class="admin-table-wrap">
+                    <table class="admin-table">
+                      <thead>
+                        <tr><th>Date</th><th>Stylist</th><th>Status</th><th>Start</th><th>End</th><th>Reason</th><th>Actions</th></tr>
+                      </thead>
+                      <tbody data-admin-table-body></tbody>
+                    </table>
+                  </div>
                 </div>
-                <button class="button outline-dark" type="button" data-admin-save-csv>Save CSV Text</button>
-              </details>
+
+                <details class="admin-card admin-advanced">
+                  <summary>Advanced: CSV import/export view</summary>
+                  <p class="muted">This is optional. Daily operations should use the direct form above.</p>
+                  <div class="field">
+                    <label for="csv-file">Upload CSV from Excel</label>
+                    <input id="csv-file" type="file" accept=".csv" data-admin-file>
+                  </div>
+                  <div class="field full">
+                    <label for="csv-editor">Current CSV</label>
+                    <textarea id="csv-editor" data-admin-csv-editor></textarea>
+                  </div>
+                  <button class="button outline-dark" type="button" data-admin-save-csv>Save CSV Text</button>
+                </details>
+              </section>
+
+              <section class="admin-tab-panel" data-admin-panel="settings" hidden>
+                <form class="admin-card admin-settings-form" data-admin-settings-form>
+                  <div class="admin-section-title">
+                    <div>
+                      <p class="eyebrow">Salon Setup</p>
+                      <h3>Booking settings</h3>
+                    </div>
+                    <p class="muted">Update service names, stylists, durations, opening hours, and booking hold rules.</p>
+                  </div>
+                  <div class="admin-settings-grid">
+                    <div class="field">
+                      <label for="setting-slot-duration">Slot interval (minutes)</label>
+                      <input id="setting-slot-duration" type="number" min="15" max="120" step="15" data-settings-slot-duration>
+                    </div>
+                    <div class="field">
+                      <label for="setting-hold-minutes">Pending hold (minutes)</label>
+                      <input id="setting-hold-minutes" type="number" min="1" max="240" step="1" data-settings-hold-minutes>
+                    </div>
+                  </div>
+                  <div class="field">
+                    <label for="setting-services">Services, one per line</label>
+                    <textarea id="setting-services" class="admin-compact-textarea" data-settings-services></textarea>
+                  </div>
+                  <div class="field">
+                    <label for="setting-durations">Service durations, one per line as Service Name: minutes</label>
+                    <textarea id="setting-durations" class="admin-compact-textarea" data-settings-durations></textarea>
+                  </div>
+                  <div class="field">
+                    <label for="setting-stylists">Stylists, one per line as Name: Level</label>
+                    <textarea id="setting-stylists" class="admin-compact-textarea" data-settings-stylists></textarea>
+                  </div>
+                  <div>
+                    <label class="admin-setting-label">Opening hours</label>
+                    <div class="admin-hours-editor" data-settings-hours></div>
+                  </div>
+                  <button class="button dark" type="submit">Save Settings</button>
+                </form>
+              </section>
+
+              <section class="admin-tab-panel" data-admin-panel="backup" hidden>
+                <div class="admin-card">
+                  <div class="admin-section-title">
+                    <div>
+                      <p class="eyebrow">Data Backup</p>
+                      <h3>Export admin data</h3>
+                    </div>
+                    <p class="muted">Download a backup before major edits, busy seasons, or handover to the salon team.</p>
+                  </div>
+                  <div class="admin-export-grid">
+                    <button class="button dark" type="button" data-admin-export="all">Export Everything</button>
+                    <button class="button outline-dark" type="button" data-admin-export="bookings">Export Bookings</button>
+                    <button class="button outline-dark" type="button" data-admin-export="blocks">Export Blocked Times</button>
+                    <button class="button outline-dark" type="button" data-admin-export="settings">Export Settings</button>
+                  </div>
+                  <p class="muted">Exports use the current stored data after automatic cleanup has run.</p>
+                </div>
+              </section>
             </section>
           </div>
         </section>

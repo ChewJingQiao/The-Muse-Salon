@@ -7,9 +7,11 @@ const adminState = {
   bookingDatesPage: 1,
   bookingFilterStatus: "all",
   bookingFilterFrom: "",
-  bookingFilterTo: ""
+  bookingFilterTo: "",
+  bookingSearch: "",
+  activeTab: "bookings"
 };
-const ADMIN_REFRESH_INTERVAL_MS = 15000;
+const ADMIN_REFRESH_INTERVAL_MS = 60000;
 const CONFIRMED_BLOCKS_PER_PAGE = 6;
 const BOOKING_DATES_PER_PAGE = 9;
 let adminRefreshTimer = null;
@@ -32,6 +34,7 @@ const csvSaveButton = document.querySelector("[data-admin-save-csv]");
 const summaryTarget = document.querySelector("[data-admin-summary]");
 const bookingsTarget = document.querySelector("[data-admin-bookings]");
 const confirmedBlocksTarget = document.querySelector("[data-admin-confirmed-blocks]");
+const bookingFilterSearch = document.querySelector("[data-booking-filter-search]");
 const bookingFilterStatus = document.querySelector("[data-booking-filter-status]");
 const bookingFilterFrom = document.querySelector("[data-booking-filter-from]");
 const bookingFilterTo = document.querySelector("[data-booking-filter-to]");
@@ -39,6 +42,16 @@ const bookingFilterClear = document.querySelector("[data-booking-filter-clear]")
 const bookingModal = document.querySelector("[data-booking-modal]");
 const bookingModalTitle = document.querySelector("[data-booking-modal-title]");
 const bookingModalBody = document.querySelector("[data-booking-modal-body]");
+const adminTabButtons = [...document.querySelectorAll("[data-admin-tab-button]")];
+const adminPanels = [...document.querySelectorAll("[data-admin-panel]")];
+const settingsForm = document.querySelector("[data-admin-settings-form]");
+const settingsSlotDuration = document.querySelector("[data-settings-slot-duration]");
+const settingsHoldMinutes = document.querySelector("[data-settings-hold-minutes]");
+const settingsServices = document.querySelector("[data-settings-services]");
+const settingsDurations = document.querySelector("[data-settings-durations]");
+const settingsStylists = document.querySelector("[data-settings-stylists]");
+const settingsHours = document.querySelector("[data-settings-hours]");
+const exportButtons = [...document.querySelectorAll("[data-admin-export]")];
 
 const blockForm = document.querySelector("[data-admin-block-form]");
 const rowIndexField = document.querySelector("[data-entry-row-index]");
@@ -51,6 +64,7 @@ const reasonField = document.querySelector("[data-entry-reason]");
 const clearEntryButton = document.querySelector("[data-entry-clear]");
 
 const ALL_STYLISTS = "Any available stylist";
+const DAY_ORDER = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 let adminAlertTimer = null;
 
 function showAdminAlert(message, state = "success") {
@@ -130,6 +144,27 @@ function blockStylistLabel(value) {
   return !value || value === ALL_STYLISTS ? "All stylists" : value;
 }
 
+function dayLabel(day) {
+  return day.charAt(0).toUpperCase() + day.slice(1);
+}
+
+function linesFromTextarea(value) {
+  return String(value || "").split("\n").map((line) => line.trim()).filter(Boolean);
+}
+
+function parseNameValueLines(value, valueLabel = "value") {
+  return linesFromTextarea(value).reduce((acc, line) => {
+    const [rawName, ...rawRest] = line.split(":");
+    const name = rawName.trim();
+    const rawValue = rawRest.join(":").trim();
+    if (!name || !rawValue) {
+      throw new Error(`Each ${valueLabel} line must use Name: Value format.`);
+    }
+    acc[name] = rawValue;
+    return acc;
+  }, {});
+}
+
 function defaultServiceDuration(service) {
   return Number(adminState.settings?.serviceDurations?.[service] || adminState.settings?.slotDurationMinutes || 30);
 }
@@ -207,9 +242,75 @@ function renderHours(settings) {
   const order = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
   hoursTarget.innerHTML = order.map((day) => {
     const config = settings.weeklyHours[day];
-    const label = day.charAt(0).toUpperCase() + day.slice(1);
+    const label = dayLabel(day);
     return `<div><strong>${label}</strong><span>${config.open} - ${config.close}</span></div>`;
   }).join("");
+}
+
+function renderSettings(settings) {
+  if (!settingsForm || !settings) return;
+  if (settingsSlotDuration) settingsSlotDuration.value = settings.slotDurationMinutes || 30;
+  if (settingsHoldMinutes) settingsHoldMinutes.value = settings.holdMinutes || 10;
+  if (settingsServices) settingsServices.value = (settings.services || []).join("\n");
+  if (settingsDurations) {
+    const durations = settings.serviceDurations || {};
+    settingsDurations.value = (settings.services || Object.keys(durations))
+      .map((service) => `${service}: ${durations[service] || settings.slotDurationMinutes || 30}`)
+      .join("\n");
+  }
+  if (settingsStylists) {
+    settingsStylists.value = (settings.stylists || [])
+      .map((stylist) => `${stylist.name}: ${stylist.level}`)
+      .join("\n");
+  }
+  if (settingsHours) {
+    settingsHours.innerHTML = DAY_ORDER.map((day) => {
+      const config = settings.weeklyHours?.[day] || { open: "11:30", close: "20:00" };
+      return `
+        <div class="admin-hour-row">
+          <strong>${dayLabel(day)}</strong>
+          <input aria-label="${dayLabel(day)} opening time" type="time" value="${escapeHtml(config.open)}" data-settings-open="${day}">
+          <input aria-label="${dayLabel(day)} closing time" type="time" value="${escapeHtml(config.close)}" data-settings-close="${day}">
+        </div>
+      `;
+    }).join("");
+  }
+}
+
+function buildSettingsPayload() {
+  const services = linesFromTextarea(settingsServices?.value);
+  if (!services.length) throw new Error("Add at least one service.");
+
+  const durationLines = parseNameValueLines(settingsDurations?.value, "duration");
+  const serviceDurations = services.reduce((acc, service) => {
+    const duration = Number(durationLines[service]);
+    if (!Number.isInteger(duration) || duration < 15 || duration > 480) {
+      throw new Error(`Duration for ${service} must be between 15 and 480 minutes.`);
+    }
+    acc[service] = duration;
+    return acc;
+  }, {});
+
+  const stylistLines = parseNameValueLines(settingsStylists?.value, "stylist");
+  const stylists = Object.entries(stylistLines).map(([name, level]) => ({ name, level }));
+  if (!stylists.length) throw new Error("Add at least one stylist.");
+
+  const weeklyHours = DAY_ORDER.reduce((acc, day) => {
+    const open = document.querySelector(`[data-settings-open="${day}"]`)?.value || "";
+    const close = document.querySelector(`[data-settings-close="${day}"]`)?.value || "";
+    if (!open || !close) throw new Error(`Opening hours are required for ${dayLabel(day)}.`);
+    acc[day] = { open, close };
+    return acc;
+  }, {});
+
+  return {
+    slotDurationMinutes: Number(settingsSlotDuration?.value || 30),
+    holdMinutes: Number(settingsHoldMinutes?.value || 10),
+    services,
+    serviceDurations,
+    stylists,
+    weeklyHours
+  };
 }
 
 function renderBlockStylistOptions(settings) {
@@ -300,8 +401,31 @@ function countBookingsByStatus(items) {
   }, {});
 }
 
+function bookingMatchesSearch(booking, query) {
+  if (!query) return true;
+  const normalizedQuery = query.toLowerCase();
+  const digitQuery = query.replace(/\D/g, "");
+  const text = [
+    booking.bookingId,
+    booking.id,
+    booking.name,
+    booking.phone,
+    booking.service,
+    booking.stylist,
+    booking.date,
+    booking.time,
+    booking.status,
+    booking.remarks,
+    booking.privateNote
+  ].join(" ").toLowerCase();
+  const phoneDigits = String(booking.phone || "").replace(/\D/g, "");
+  return text.includes(normalizedQuery) || Boolean(digitQuery && phoneDigits.includes(digitQuery));
+}
+
 function applyBookingFilters(bookings) {
+  const searchQuery = adminState.bookingSearch.trim();
   return bookings.filter((booking) => {
+    if (!bookingMatchesSearch(booking, searchQuery)) return false;
     if (adminState.bookingFilterStatus !== "all" && booking.status !== adminState.bookingFilterStatus) return false;
     if (adminState.bookingFilterFrom && booking.date < adminState.bookingFilterFrom) return false;
     if (adminState.bookingFilterTo && booking.date > adminState.bookingFilterTo) return false;
@@ -356,7 +480,7 @@ function renderBookings(bookings) {
   const visibleBookings = applyBookingFilters(bookings);
 
   if (!visibleBookings.length) {
-    bookingsTarget.innerHTML = '<div class="admin-empty-panel">No customer bookings yet.</div>';
+    bookingsTarget.innerHTML = `<div class="admin-empty-panel">${bookings.length ? "No bookings match the current search or filters." : "No customer bookings yet."}</div>`;
     return;
   }
 
@@ -492,6 +616,7 @@ async function loadAdminData() {
     renderConfirmedBlocks(payload.bookings || []);
     renderBlockStylistOptions(payload.settings);
     renderHours(payload.settings);
+    renderSettings(payload.settings);
     warning.hidden = !payload.config_warning;
   })();
 
@@ -504,6 +629,7 @@ async function loadAdminData() {
 
 async function refreshAdminDataQuietly() {
   if (!adminState.authenticated || document.hidden) return;
+  if (!["bookings", "blocking"].includes(adminState.activeTab)) return;
   try {
     await loadAdminData();
   } catch {
@@ -520,6 +646,30 @@ function stopAdminAutoRefresh() {
   if (!adminRefreshTimer) return;
   window.clearInterval(adminRefreshTimer);
   adminRefreshTimer = null;
+}
+
+function activateAdminTab(tabName) {
+  adminState.activeTab = tabName;
+  adminTabButtons.forEach((button) => {
+    const active = button.dataset.adminTabButton === tabName;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-selected", active ? "true" : "false");
+  });
+  adminPanels.forEach((panel) => {
+    panel.hidden = panel.dataset.adminPanel !== tabName;
+  });
+}
+
+function downloadTextFile(filename, contentType, content) {
+  const blob = new Blob([content], { type: contentType || "text/plain" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
 }
 
 async function checkAuth() {
@@ -578,8 +728,9 @@ refreshButton?.addEventListener("click", async () => {
   showAdminAlert("Admin data refreshed.");
 });
 
-[bookingFilterStatus, bookingFilterFrom, bookingFilterTo].forEach((control) => {
+[bookingFilterSearch, bookingFilterStatus, bookingFilterFrom, bookingFilterTo].forEach((control) => {
   control?.addEventListener("change", () => {
+    adminState.bookingSearch = bookingFilterSearch?.value || "";
     adminState.bookingFilterStatus = bookingFilterStatus?.value || "all";
     adminState.bookingFilterFrom = bookingFilterFrom?.value || "";
     adminState.bookingFilterTo = bookingFilterTo?.value || "";
@@ -588,10 +739,18 @@ refreshButton?.addEventListener("click", async () => {
   });
 });
 
+bookingFilterSearch?.addEventListener("input", () => {
+  adminState.bookingSearch = bookingFilterSearch.value || "";
+  adminState.bookingDatesPage = 1;
+  renderBookings(adminState.bookings);
+});
+
 bookingFilterClear?.addEventListener("click", () => {
+  adminState.bookingSearch = "";
   adminState.bookingFilterStatus = "all";
   adminState.bookingFilterFrom = "";
   adminState.bookingFilterTo = "";
+  if (bookingFilterSearch) bookingFilterSearch.value = "";
   if (bookingFilterStatus) bookingFilterStatus.value = "all";
   if (bookingFilterFrom) bookingFilterFrom.value = "";
   if (bookingFilterTo) bookingFilterTo.value = "";
@@ -607,6 +766,12 @@ window.addEventListener("focus", refreshAdminDataQuietly);
 
 statusField?.addEventListener("change", updateTimeFieldState);
 clearEntryButton?.addEventListener("click", clearEntryForm);
+
+adminTabButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    activateAdminTab(button.dataset.adminTabButton);
+  });
+});
 
 blockForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -813,6 +978,55 @@ csvSaveButton?.addEventListener("click", async () => {
   await loadAdminData();
   clearEntryForm();
   showAdminAlert("CSV availability file saved.");
+});
+
+settingsForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  clearAdminAlert();
+
+  let payload;
+  try {
+    payload = buildSettingsPayload();
+  } catch (error) {
+    showAdminAlert(error.message || "Please check the settings form.", "error");
+    return;
+  }
+
+  const response = await fetch("/api/admin/save-settings", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  const result = await response.json();
+
+  if (!response.ok) {
+    showAdminAlert(result.error || "Could not save settings.", "error");
+    return;
+  }
+
+  await loadAdminData();
+  showAdminAlert("Booking settings saved.");
+});
+
+exportButtons.forEach((button) => {
+  button.addEventListener("click", async () => {
+    clearAdminAlert();
+    const type = button.dataset.adminExport;
+    const response = await fetch(`/api/admin/export?type=${encodeURIComponent(type)}`, {
+      credentials: "same-origin",
+      cache: "no-store"
+    });
+    const payload = await response.json();
+
+    if (!response.ok) {
+      showAdminAlert(payload.error || "Could not export data.", "error");
+      return;
+    }
+
+    downloadTextFile(payload.filename, payload.contentType, payload.content);
+    showAdminAlert(`${payload.label || "Backup"} downloaded.`);
+  });
 });
 
 checkAuth();

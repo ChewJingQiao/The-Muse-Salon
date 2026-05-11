@@ -10,6 +10,7 @@ const SETTINGS_KEY = "booking-settings";
 const BOOKINGS_KEY = "bookings";
 const ANY_STYLIST = "Any available stylist";
 const HOLD_MINUTES = 10;
+const MAX_ADVANCE_BOOKING_DAYS = 60;
 const RECORD_RETENTION_DAYS_AFTER_DATE = 1;
 const DAY_ORDER = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 
@@ -196,6 +197,10 @@ function cleanupCutoffDate() {
   return addDays(businessToday(), -RECORD_RETENTION_DAYS_AFTER_DATE);
 }
 
+function maxBookingDate() {
+  return addDays(businessToday(), MAX_ADVANCE_BOOKING_DAYS);
+}
+
 function isRecordPastRetention(dateString) {
   return /^\d{4}-\d{2}-\d{2}$/.test(dateString || "") && dateString < cleanupCutoffDate();
 }
@@ -296,6 +301,63 @@ function validateEntryStylist(entry, settings) {
   }
 }
 
+function validateSettingsBody(body = {}, currentSettings = normalizeSettings()) {
+  const slotDurationMinutes = Number(body.slotDurationMinutes || 30);
+  const holdMinutes = Number(body.holdMinutes || HOLD_MINUTES);
+  if (!Number.isInteger(slotDurationMinutes) || slotDurationMinutes < 15 || slotDurationMinutes > 120) {
+    throw new Error("Slot interval must be between 15 and 120 minutes.");
+  }
+  if (!Number.isInteger(holdMinutes) || holdMinutes < 1 || holdMinutes > 240) {
+    throw new Error("Pending hold must be between 1 and 240 minutes.");
+  }
+
+  const services = Array.isArray(body.services)
+    ? body.services.map((item) => String(item || "").trim()).filter(Boolean)
+    : [];
+  if (!services.length) throw new Error("Add at least one service.");
+  if (new Set(services).size !== services.length) throw new Error("Service names must be unique.");
+
+  const sourceDurations = body.serviceDurations && typeof body.serviceDurations === "object" ? body.serviceDurations : {};
+  const serviceDurations = {};
+  for (const service of services) {
+    const duration = Number(sourceDurations[service] || slotDurationMinutes);
+    if (!Number.isInteger(duration) || duration < 15 || duration > 480) {
+      throw new Error(`Duration for ${service} must be between 15 and 480 minutes.`);
+    }
+    serviceDurations[service] = duration;
+  }
+
+  const stylists = Array.isArray(body.stylists)
+    ? body.stylists.map((item) => ({
+        name: String(item?.name || "").trim(),
+        level: String(item?.level || "").trim()
+      }))
+    : [];
+  if (!stylists.length) throw new Error("Add at least one stylist.");
+  if (stylists.some((item) => !item.name || !item.level)) throw new Error("Each stylist needs a name and level.");
+  if (new Set(stylists.map((item) => item.name)).size !== stylists.length) throw new Error("Stylist names must be unique.");
+
+  const weeklyHours = {};
+  const sourceHours = body.weeklyHours && typeof body.weeklyHours === "object" ? body.weeklyHours : {};
+  for (const day of DAY_ORDER) {
+    const open = String(sourceHours[day]?.open || "").trim();
+    const close = String(sourceHours[day]?.close || "").trim();
+    if (!open || !close) throw new Error(`Opening hours are required for ${day}.`);
+    if (parseTime(open) >= parseTime(close)) throw new Error(`Closing time must be after opening time for ${day}.`);
+    weeklyHours[day] = { open, close };
+  }
+
+  return normalizeSettings({
+    ...currentSettings,
+    slotDurationMinutes,
+    holdMinutes,
+    services,
+    serviceDurations,
+    stylists,
+    weeklyHours
+  });
+}
+
 function entriesToCsv(entries) {
   const head = "date,status,start_time,end_time,reason,stylist";
   const lines = entries.map((entry) => {
@@ -387,6 +449,38 @@ function bookingForAdmin(booking, settings = normalizeSettings()) {
   };
 }
 
+function phoneDigits(value) {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function isValidPhoneInput(value) {
+  const raw = String(value || "").trim();
+  const digits = phoneDigits(raw);
+  return /^[\d\s()+-]+$/.test(raw) && digits.length >= 8 && digits.length <= 15;
+}
+
+function phoneMatches(storedPhone, submittedPhone) {
+  if (!isValidPhoneInput(submittedPhone)) return false;
+  const stored = phoneDigits(storedPhone);
+  const submitted = phoneDigits(submittedPhone);
+  return stored === submitted || stored.endsWith(submitted) || submitted.endsWith(stored);
+}
+
+function bookingForCustomer(booking) {
+  return {
+    bookingId: booking.bookingId || booking.id,
+    status: booking.status,
+    service: booking.service,
+    stylist: booking.stylist,
+    date: booking.date,
+    time: booking.time,
+    name: booking.name,
+    expiresAt: booking.expiresAt,
+    confirmedAt: booking.confirmedAt,
+    cancelledAt: booking.cancelledAt
+  };
+}
+
 function sortBookings(bookings) {
   return [...bookings].sort((a, b) =>
     `${a.date || ""}${a.time || ""}${a.createdAt || ""}`.localeCompare(`${b.date || ""}${b.time || ""}${b.createdAt || ""}`)
@@ -396,6 +490,33 @@ function sortBookings(bookings) {
 function buildSlots(date, settings, entries, bookings, stylist = ANY_STYLIST, service = "", durationOverrideMinutes = null, excludeBookingId = "") {
   const d = new Date(`${date}T00:00:00`);
   if (Number.isNaN(d.getTime())) throw new Error("Invalid date format.");
+  const maxDate = maxBookingDate();
+  if (date < businessToday()) {
+    return {
+      date,
+      stylist,
+      service,
+      serviceDurationMinutes: serviceDuration(settings, service, durationOverrideMinutes),
+      closed: true,
+      reason: "Please choose today or a future date.",
+      bookingWindowDays: MAX_ADVANCE_BOOKING_DAYS,
+      maxBookingDate: maxDate,
+      slots: []
+    };
+  }
+  if (date > maxDate) {
+    return {
+      date,
+      stylist,
+      service,
+      serviceDurationMinutes: serviceDuration(settings, service, durationOverrideMinutes),
+      closed: true,
+      reason: `Appointments can only be booked up to ${MAX_ADVANCE_BOOKING_DAYS} days in advance.`,
+      bookingWindowDays: MAX_ADVANCE_BOOKING_DAYS,
+      maxBookingDate: maxDate,
+      slots: []
+    };
+  }
   const weekday = DAY_ORDER[(d.getDay() + 6) % 7];
   const hours = settings.weeklyHours[weekday];
   if (!hours) return { date, stylist, closed: true, reason: "No business hours configured for this day.", slots: [] };
@@ -426,7 +547,17 @@ function buildSlots(date, settings, entries, bookings, stylist = ANY_STYLIST, se
     );
     if (!booked) slots.push({ value, label: labelTime(value) });
   }
-  return { date, stylist, service, serviceDurationMinutes: duration, closed: false, reason: "", slots };
+  return {
+    date,
+    stylist,
+    service,
+    serviceDurationMinutes: duration,
+    closed: false,
+    reason: "",
+    bookingWindowDays: MAX_ADVANCE_BOOKING_DAYS,
+    maxBookingDate: maxDate,
+    slots
+  };
 }
 
 function validateBookingBody(body, settings) {
@@ -445,9 +576,12 @@ function validateBookingBody(body, settings) {
   const stylistNames = new Set([ANY_STYLIST, ...settings.stylists.map((item) => item.name)]);
   if (!stylistNames.has(stylist)) throw new Error("Please choose a valid stylist.");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Date must be in YYYY-MM-DD format.");
+  if (date < businessToday()) throw new Error("Please choose today or a future date.");
+  if (date > maxBookingDate()) throw new Error(`Appointments can only be booked up to ${MAX_ADVANCE_BOOKING_DAYS} days in advance.`);
   parseTime(time);
-  const phoneDigits = phone.replace(/\D/g, "");
-  if (phoneDigits.length < 8 || phoneDigits.length > 15) throw new Error("Please enter a valid phone number.");
+  if (!isValidPhoneInput(phone)) {
+    throw new Error("Please enter a valid phone number using digits, spaces, +, -, or brackets only.");
+  }
   return { service, stylist, date, time, name, phone, remarks };
 }
 
@@ -507,6 +641,52 @@ async function getStoreData() {
   if (expireStaleBookings(bookings)) await store.setJSON(BOOKINGS_KEY, bookings);
 
   return { store, settings, entries, bookings };
+}
+
+function exportPayload(type, settings, entries, bookings) {
+  const stamp = businessToday();
+  if (type === "bookings") {
+    return {
+      label: "Bookings backup",
+      filename: `kya-bookings-${stamp}.json`,
+      contentType: "application/json",
+      content: JSON.stringify(sortBookings(bookings), null, 2)
+    };
+  }
+  if (type === "blocks") {
+    return {
+      label: "Blocked times backup",
+      filename: `kya-blocked-times-${stamp}.csv`,
+      contentType: "text/csv",
+      content: entriesToCsv(entries)
+    };
+  }
+  if (type === "settings") {
+    return {
+      label: "Settings backup",
+      filename: `kya-settings-${stamp}.json`,
+      contentType: "application/json",
+      content: JSON.stringify(settings, null, 2)
+    };
+  }
+  if (type === "all") {
+    return {
+      label: "Full backup",
+      filename: `kya-full-backup-${stamp}.json`,
+      contentType: "application/json",
+      content: JSON.stringify(
+        {
+          exportedAt: isoNow(),
+          settings,
+          bookings: sortBookings(bookings),
+          availabilityEntries: entries
+        },
+        null,
+        2
+      )
+    };
+  }
+  throw new Error("Export type must be all, bookings, blocks, or settings.");
 }
 
 function routeFromContext(context, req) {
@@ -612,6 +792,22 @@ export default async (req, context) => {
       return jsonResponse(201, { ok: true, booking, holdMinutes });
     }
 
+    if (method === "POST" && route === "booking-status") {
+      const body = await req.json();
+      const bookingId = String(body.bookingId || body.id || "").trim().toUpperCase();
+      const phone = String(body.phone || "");
+      if (!bookingId || !isValidPhoneInput(phone)) {
+        return jsonResponse(400, { error: "Please enter a valid phone number using digits, spaces, +, -, or brackets only." });
+      }
+
+      const booking = bookings.find((item) => String(item.bookingId || item.id || "").toUpperCase() === bookingId);
+      if (!booking || !phoneMatches(booking.phone, phone)) {
+        return jsonResponse(404, { error: "No booking matched those details." });
+      }
+
+      return jsonResponse(200, { ok: true, booking: bookingForCustomer(booking) });
+    }
+
     if (route.startsWith("admin/") && !isAuthenticated(req)) {
       return jsonResponse(401, { error: "Unauthorized" });
     }
@@ -625,6 +821,15 @@ export default async (req, context) => {
         today_available_slots: buildSlots(businessToday(), settings, entries, bookings).slots.length,
         config_warning: Boolean(getAdminConfigProblem())
       });
+    }
+
+    if (method === "GET" && route === "admin/export") {
+      const type = url.searchParams.get("type") || "all";
+      try {
+        return jsonResponse(200, exportPayload(type, settings, entries, bookings));
+      } catch (error) {
+        return jsonResponse(400, { error: error.message });
+      }
     }
 
     if (method === "POST" && route === "admin/update-booking-status") {
@@ -720,6 +925,16 @@ export default async (req, context) => {
       booking.noteUpdatedAt = isoNow();
       await store.setJSON(BOOKINGS_KEY, bookings);
       return jsonResponse(200, { ok: true, booking: bookingForAdmin(booking, settings) });
+    }
+
+    if (method === "POST" && route === "admin/save-settings") {
+      try {
+        const nextSettings = validateSettingsBody(await req.json(), settings);
+        await store.setJSON(SETTINGS_KEY, nextSettings);
+        return jsonResponse(200, { ok: true, settings: nextSettings });
+      } catch (error) {
+        return jsonResponse(400, { error: error.message });
+      }
     }
 
     if (method === "POST" && route === "admin/upload-csv") {

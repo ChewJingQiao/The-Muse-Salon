@@ -123,14 +123,37 @@ if (appointmentForm) {
   const bookingWhatsapp = document.querySelector("[data-booking-whatsapp]");
   const bookingCopy = document.querySelector("[data-booking-copy]");
   const bookingNew = document.querySelector("[data-booking-new]");
+  const bookingStatusForm = document.querySelector("[data-booking-status-form]");
+  const bookingStatusResult = document.querySelector("[data-booking-status-result]");
   let holdCountdownTimer = null;
   let latestBookingMessage = "";
+  const BOOKING_WINDOW_DAYS = 60;
 
-  const today = new Date();
-  const yyyy = today.getFullYear();
-  const mm = String(today.getMonth() + 1).padStart(2, "0");
-  const dd = String(today.getDate()).padStart(2, "0");
-  dateField.min = `${yyyy}-${mm}-${dd}`;
+  const malaysiaDateString = (date = new Date()) => {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Kuala_Lumpur",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }).formatToParts(date);
+    const get = (type) => parts.find((part) => part.type === type)?.value;
+    return `${get("year")}-${get("month")}-${get("day")}`;
+  };
+
+  const addDays = (dateString, days) => {
+    const date = new Date(`${dateString}T00:00:00`);
+    date.setDate(date.getDate() + days);
+    return [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, "0"),
+      String(date.getDate()).padStart(2, "0")
+    ].join("-");
+  };
+
+  const todayString = malaysiaDateString();
+  const maxBookingDate = addDays(todayString, BOOKING_WINDOW_DAYS);
+  dateField.min = todayString;
+  dateField.max = maxBookingDate;
 
   const slotPeriod = (value) => {
     const hour = Number(value.split(":")[0]);
@@ -177,21 +200,17 @@ if (appointmentForm) {
     "'": "&#39;"
   }[char]));
 
+  const isValidPhoneInput = (value) => {
+    const raw = String(value || "").trim();
+    const digits = raw.replace(/\D/g, "");
+    return /^[\d\s()+-]+$/.test(raw) && digits.length >= 8 && digits.length <= 15;
+  };
+
   const labelTime = (value) => {
     if (!value) return "";
     const [hours, minutes] = value.split(":").map(Number);
     const suffix = hours >= 12 ? "PM" : "AM";
     return `${hours % 12 || 12}:${String(minutes).padStart(2, "0")} ${suffix}`;
-  };
-
-  const addDays = (dateString, days) => {
-    const date = new Date(`${dateString}T00:00:00`);
-    date.setDate(date.getDate() + days);
-    return [
-      date.getFullYear(),
-      String(date.getMonth() + 1).padStart(2, "0"),
-      String(date.getDate()).padStart(2, "0")
-    ].join("-");
   };
 
   const shortDate = (dateString) => {
@@ -222,6 +241,13 @@ if (appointmentForm) {
     `Phone: ${booking.phone}`,
     `Remarks: ${booking.remarks || "-"}`
   ].join("\n");
+
+  const appointmentStatusLabel = (status) => ({
+    pending: "Pending confirmation",
+    confirmed: "Confirmed",
+    cancelled: "Cancelled",
+    expired: "Expired"
+  }[status] || "Unknown");
 
   const updateHoldCountdown = (booking) => {
     if (holdCountdownTimer) window.clearInterval(holdCountdownTimer);
@@ -272,7 +298,12 @@ if (appointmentForm) {
       return;
     }
 
-    const dates = Array.from({ length: 7 }, (_, index) => addDays(date, index));
+    const dates = Array.from({ length: 7 }, (_, index) => addDays(date, index))
+      .filter((itemDate) => itemDate <= maxBookingDate);
+    if (!dates.length) {
+      availabilityCalendar.innerHTML = `<p class="mini-calendar-note">Bookings are open up to ${BOOKING_WINDOW_DAYS} days ahead.</p>`;
+      return;
+    }
     availabilityCalendar.innerHTML = '<p class="mini-calendar-note">Checking the next few days...</p>';
 
     try {
@@ -308,6 +339,15 @@ if (appointmentForm) {
       setTimeOptions([], "Select service, stylist and date first", true);
       availabilityFeedback.textContent = "Choose a service, stylist and date to view available appointment times.";
       await loadAvailabilityCalendar(date, service, stylist);
+      return;
+    }
+
+    if (date > maxBookingDate) {
+      setTimeOptions([], "Choose an earlier date", true);
+      availabilityFeedback.textContent = `Bookings are open up to ${BOOKING_WINDOW_DAYS} days ahead. Please choose ${maxBookingDate} or earlier.`;
+      if (availabilityCalendar) {
+        availabilityCalendar.innerHTML = `<p class="mini-calendar-note">Bookings are open up to ${BOOKING_WINDOW_DAYS} days ahead.</p>`;
+      }
       return;
     }
 
@@ -372,10 +412,15 @@ if (appointmentForm) {
       return;
     }
 
-    const phoneDigits = String(data.get("phone") || "").replace(/\D/g, "");
-    if (phoneDigits.length < 8 || phoneDigits.length > 15) {
-      availabilityFeedback.textContent = "Please enter a valid phone number.";
+    if (!isValidPhoneInput(data.get("phone"))) {
+      availabilityFeedback.textContent = "Please enter a valid phone number using digits, spaces, +, -, or brackets only.";
       phoneField.focus();
+      return;
+    }
+
+    if (String(data.get("date")) > maxBookingDate) {
+      availabilityFeedback.textContent = `Bookings are open up to ${BOOKING_WINDOW_DAYS} days ahead. Please choose ${maxBookingDate} or earlier.`;
+      dateField.focus();
       return;
     }
 
@@ -450,6 +495,75 @@ if (appointmentForm) {
       window.setTimeout(() => {
         bookingCopy.textContent = originalText;
       }, 1800);
+    }
+  });
+
+  bookingStatusForm?.querySelector("[data-booking-id-suffix]")?.addEventListener("input", (event) => {
+    const clean = event.target.value.toUpperCase().replace(/^KYA-/, "").replace(/[^A-Z0-9]/g, "").slice(0, 4);
+    event.target.value = clean;
+  });
+
+  bookingStatusForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!bookingStatusResult) return;
+
+    const data = new FormData(bookingStatusForm);
+    const bookingIdRaw = String(data.get("bookingId") || "").trim().toUpperCase();
+    const bookingId = bookingIdRaw.startsWith("KYA-") ? bookingIdRaw : `KYA-${bookingIdRaw}`;
+    const phone = String(data.get("phone") || "").trim();
+    const button = bookingStatusForm.querySelector("button[type='submit']");
+    const originalText = button.textContent;
+
+    bookingStatusResult.hidden = true;
+    bookingStatusResult.classList.remove("error");
+
+    if (!bookingId || !isValidPhoneInput(phone)) {
+      bookingStatusResult.innerHTML = "<p>Please enter a valid phone number using digits, spaces, +, -, or brackets only.</p>";
+      bookingStatusResult.classList.add("error");
+      bookingStatusResult.hidden = false;
+      return;
+    }
+
+    button.disabled = true;
+    button.textContent = "Checking...";
+
+    try {
+      const response = await fetch("/api/booking-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bookingId, phone })
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.error || "Could not find this booking.");
+      }
+
+      const booking = payload.booking;
+      bookingStatusResult.innerHTML = `
+        <h4>${escapeHtml(appointmentStatusLabel(booking.status))}</h4>
+        <dl class="booking-summary">
+          ${[
+            ["Booking ID", booking.bookingId],
+            ["Service", booking.service],
+            ["Stylist", booking.stylist],
+            ["Date", booking.date],
+            ["Time", labelTime(booking.time)],
+            ["Name", booking.name],
+            ["Hold expires", booking.expiresAt ? formatDateTime(booking.expiresAt) : "-"],
+            ["Confirmed at", booking.confirmedAt ? formatDateTime(booking.confirmedAt) : "-"],
+            ["Cancelled at", booking.cancelledAt ? formatDateTime(booking.cancelledAt) : "-"]
+          ].map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}
+        </dl>
+      `;
+      bookingStatusResult.hidden = false;
+    } catch (error) {
+      bookingStatusResult.innerHTML = `<p>${escapeHtml(error.message)}</p>`;
+      bookingStatusResult.classList.add("error");
+      bookingStatusResult.hidden = false;
+    } finally {
+      button.disabled = false;
+      button.textContent = originalText;
     }
   });
 }
