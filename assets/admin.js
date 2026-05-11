@@ -22,6 +22,7 @@ const loginFeedback = document.querySelector("[data-admin-login-feedback]");
 const logoutButton = document.querySelector("[data-admin-logout]");
 const refreshButton = document.querySelector("[data-admin-refresh]");
 const saveFeedback = document.querySelector("[data-admin-save-feedback]");
+const adminAlert = document.querySelector("[data-admin-alert]");
 const csvEditor = document.querySelector("[data-admin-csv-editor]");
 const fileInput = document.querySelector("[data-admin-file]");
 const tableBody = document.querySelector("[data-admin-table-body]");
@@ -50,6 +51,34 @@ const reasonField = document.querySelector("[data-entry-reason]");
 const clearEntryButton = document.querySelector("[data-entry-clear]");
 
 const ALL_STYLISTS = "Any available stylist";
+let adminAlertTimer = null;
+
+function showAdminAlert(message, state = "success") {
+  if (saveFeedback) saveFeedback.textContent = message;
+  if (!adminAlert) return;
+
+  window.clearTimeout(adminAlertTimer);
+  adminAlert.textContent = message;
+  adminAlert.dataset.state = state;
+  adminAlert.hidden = false;
+  adminAlertTimer = window.setTimeout(() => {
+    adminAlert.hidden = true;
+  }, 4200);
+}
+
+function clearAdminAlert() {
+  if (saveFeedback) saveFeedback.textContent = "";
+  if (!adminAlert) return;
+  window.clearTimeout(adminAlertTimer);
+  adminAlert.hidden = true;
+}
+
+function bookingStatusMessage(status, bookingId) {
+  if (status === "confirmed") return `Booking ${bookingId} confirmed. The slot is now blocked.`;
+  if (status === "cancelled") return `Booking ${bookingId} cancelled. The slot is available again.`;
+  if (status === "expired") return `Booking ${bookingId} marked as expired. The hold is released.`;
+  return `Booking ${bookingId} updated.`;
+}
 
 function escapeHtml(value) {
   return String(value || "").replace(/[&<>"']/g, (char) => ({
@@ -544,8 +573,9 @@ logoutButton?.addEventListener("click", async () => {
 });
 
 refreshButton?.addEventListener("click", async () => {
-  saveFeedback.textContent = "";
+  clearAdminAlert();
   await loadAdminData();
+  showAdminAlert("Admin data refreshed.");
 });
 
 [bookingFilterStatus, bookingFilterFrom, bookingFilterTo].forEach((control) => {
@@ -580,7 +610,7 @@ clearEntryButton?.addEventListener("click", clearEntryForm);
 
 blockForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
-  saveFeedback.textContent = "";
+  clearAdminAlert();
 
   const payload = {
     row_index: rowIndexField.value === "" ? null : Number(rowIndexField.value),
@@ -601,13 +631,13 @@ blockForm?.addEventListener("submit", async (event) => {
   const result = await response.json();
 
   if (!response.ok) {
-    saveFeedback.textContent = result.error || "Could not save entry.";
+    showAdminAlert(result.error || "Could not save block.", "error");
     return;
   }
 
-  saveFeedback.textContent = "Block saved.";
   await loadAdminData();
   clearEntryForm();
+  showAdminAlert("Blocked time saved.");
 });
 
 tableBody?.addEventListener("click", async (event) => {
@@ -628,7 +658,7 @@ tableBody?.addEventListener("click", async (event) => {
     endField.value = entry.end_time || "12:00";
     reasonField.value = entry.reason || "";
     updateTimeFieldState();
-    saveFeedback.textContent = `Editing row for ${entry.date}.`;
+    showAdminAlert(`Editing blocked time for ${entry.date}.`);
     return;
   }
 
@@ -646,13 +676,13 @@ tableBody?.addEventListener("click", async (event) => {
     const result = await response.json();
 
     if (!response.ok) {
-      saveFeedback.textContent = result.error || "Could not delete entry.";
+      showAdminAlert(result.error || "Could not delete block.", "error");
       return;
     }
 
-    saveFeedback.textContent = "Entry deleted.";
     await loadAdminData();
     clearEntryForm();
+    showAdminAlert("Blocked time deleted.");
   }
 });
 
@@ -684,7 +714,7 @@ document.addEventListener("click", async (event) => {
     const bookingId = noteButton.dataset.bookingNoteSave;
     const noteField = [...document.querySelectorAll("[data-booking-note]")]
       .find((field) => field.dataset.bookingNote === bookingId);
-    saveFeedback.textContent = "";
+    clearAdminAlert();
     const response = await fetch("/api/admin/update-booking-note", {
       method: "POST",
       credentials: "same-origin",
@@ -697,12 +727,12 @@ document.addEventListener("click", async (event) => {
     });
     const result = await response.json();
     if (!response.ok) {
-      saveFeedback.textContent = result.error || "Could not save note.";
+      showAdminAlert(result.error || "Could not save admin details.", "error");
       return;
     }
-    saveFeedback.textContent = `Admin details saved for ${bookingId}.`;
     await loadAdminData();
     if (!bookingModal?.hidden) openBookingModal((adminState.bookings.find((booking) => booking.bookingId === bookingId) || {}).date);
+    showAdminAlert(`Admin details saved for ${bookingId}.`);
     return;
   }
 
@@ -717,7 +747,7 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
-  saveFeedback.textContent = "";
+  clearAdminAlert();
   const response = await fetch("/api/admin/update-booking-status", {
     method: "POST",
     credentials: "same-origin",
@@ -731,14 +761,14 @@ document.addEventListener("click", async (event) => {
   const result = await response.json();
 
   if (!response.ok) {
-    saveFeedback.textContent = result.error || "Could not update booking.";
     await loadAdminData();
+    showAdminAlert(result.error || "Could not update booking.", "error");
     return;
   }
 
-  saveFeedback.textContent = `Booking ${bookingId} updated.`;
   await loadAdminData();
   if (!bookingModal?.hidden) openBookingModal((adminState.bookings.find((booking) => booking.bookingId === bookingId) || {}).date);
+  showAdminAlert(bookingStatusMessage(status, bookingId));
 });
 
 document.addEventListener("input", (event) => {
@@ -766,7 +796,7 @@ fileInput?.addEventListener("change", async () => {
 });
 
 csvSaveButton?.addEventListener("click", async () => {
-  saveFeedback.textContent = "";
+  clearAdminAlert();
   const response = await fetch("/api/admin/upload-csv", {
     method: "POST",
     credentials: "same-origin",
@@ -776,13 +806,13 @@ csvSaveButton?.addEventListener("click", async () => {
 
   const payload = await response.json();
   if (!response.ok) {
-    saveFeedback.textContent = payload.error || "Could not save CSV.";
+    showAdminAlert(payload.error || "Could not save CSV.", "error");
     return;
   }
 
-  saveFeedback.textContent = "CSV saved.";
   await loadAdminData();
   clearEntryForm();
+  showAdminAlert("CSV availability file saved.");
 });
 
 checkAuth();
