@@ -34,6 +34,7 @@
                 <div class="field full"><label for="stylist">Stylist</label><select id="stylist" name="stylist" required><option value="">Select a stylist</option><option>Any available stylist</option><option value="Aria Lim">Aria Lim - Director</option><option value="Elena Choo">Elena Choo - Director</option><option value="Mika Tan">Mika Tan - Senior Stylist</option><option value="Rina Wong">Rina Wong - Senior Stylist</option><option value="Celia Ng">Celia Ng - Senior Stylist</option><option value="Nova Lee">Nova Lee - Junior Stylist</option><option value="Ivy Teo">Ivy Teo - Junior Stylist</option></select></div>
                 <div class="field"><label for="date">Preferred date</label><input id="date" name="date" type="date" required></div>
                 <div class="field"><label for="time">Preferred time</label><select id="time" name="time" required disabled><option value="">Select stylist and date first</option></select></div>
+                <div class="field full"><div class="availability-calendar" data-availability-calendar></div></div>
                 <div class="field"><label for="name">Name</label><input id="name" name="name" autocomplete="name" required></div>
                 <div class="field"><label for="phone">Phone</label><input id="phone" name="phone" autocomplete="tel" inputmode="tel" placeholder="+60..." required></div>
                 <div class="field full"><label for="remarks">Remarks</label><textarea id="remarks" name="remarks" placeholder="Share your hair goal, current condition or any timing notes."></textarea></div>
@@ -49,6 +50,7 @@
               <dl class="booking-summary" data-booking-summary></dl>
               <div class="section-actions">
                 <a class="button gold" data-booking-whatsapp target="_blank" rel="noopener">Confirm on WhatsApp</a>
+                <button class="button outline-dark" type="button" data-booking-copy>Copy Booking Details</button>
                 <button class="button outline-dark" type="button" data-booking-new>Make Another Booking</button>
               </div>
             </div>

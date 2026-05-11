@@ -4,7 +4,7 @@ import { getStore } from "@netlify/blobs";
 const SESSION_COOKIE = "kya_admin_session";
 const SESSION_MAX_AGE_SECONDS = 8 * 60 * 60;
 const STORE_NAME = "kya-booking";
-const FUNCTION_VERSION = "2026-05-09-kya-booking-no-past-same-day-slots";
+const FUNCTION_VERSION = "2026-05-11-kya-booking-duration-override";
 const ENTRIES_KEY = "availability-entries";
 const SETTINGS_KEY = "booking-settings";
 const BOOKINGS_KEY = "bookings";
@@ -23,6 +23,16 @@ const DEFAULT_SERVICES = [
   "Wash & Blow"
 ];
 
+const DEFAULT_SERVICE_DURATIONS = {
+  "Haircut & Styling": 60,
+  "Hair Coloring": 150,
+  "Hair Treatment": 90,
+  "Rebonding / Smoothing": 180,
+  Perm: 150,
+  "Scalp Care": 60,
+  "Wash & Blow": 45
+};
+
 const DEFAULT_STYLISTS = [
   { name: "Aria Lim", level: "Director" },
   { name: "Elena Choo", level: "Director" },
@@ -38,6 +48,7 @@ const DEFAULT_SETTINGS = {
   slotDurationMinutes: 30,
   holdMinutes: HOLD_MINUTES,
   services: DEFAULT_SERVICES,
+  serviceDurations: DEFAULT_SERVICE_DURATIONS,
   stylists: DEFAULT_STYLISTS,
   weeklyHours: {
     monday: { open: "11:30", close: "20:00" },
@@ -193,9 +204,35 @@ function addMinutes(date, minutes) {
   return new Date(date.getTime() + minutes * 60 * 1000);
 }
 
+function serviceDuration(settings, service, overrideMinutes = null) {
+  if (overrideMinutes !== null && overrideMinutes !== undefined && overrideMinutes !== "") {
+    const override = Number(overrideMinutes);
+    if (!Number.isInteger(override) || override < 15 || override > 480) {
+      throw new Error("Duration override must be between 15 and 480 minutes.");
+    }
+    return override;
+  }
+  return Number(settings.serviceDurations?.[service] || settings.slotDurationMinutes || 30);
+}
+
+function normalizeDurationOverride(settings, service, overrideMinutes) {
+  if (overrideMinutes === null || overrideMinutes === undefined || overrideMinutes === "") return null;
+  const override = serviceDuration(settings, service, overrideMinutes);
+  const defaultDuration = serviceDuration(settings, service);
+  return override === defaultDuration ? null : override;
+}
+
+function intervalsOverlap(start, end, otherStart, otherEnd) {
+  return start < otherEnd && otherStart < end;
+}
+
 function normalizeSettings(settings = {}) {
   const source = settings && typeof settings === "object" && !Array.isArray(settings) ? settings : {};
   const services = Array.isArray(source.services) && source.services.length ? source.services : DEFAULT_SERVICES;
+  const serviceDurations =
+    source.serviceDurations && typeof source.serviceDurations === "object" && !Array.isArray(source.serviceDurations)
+      ? source.serviceDurations
+      : DEFAULT_SERVICE_DURATIONS;
   const stylists = Array.isArray(source.stylists) && source.stylists.length ? source.stylists : DEFAULT_STYLISTS;
   const weeklyHours =
     source.weeklyHours && typeof source.weeklyHours === "object" && !Array.isArray(source.weeklyHours)
@@ -206,6 +243,10 @@ function normalizeSettings(settings = {}) {
     ...DEFAULT_SETTINGS,
     ...source,
     services,
+    serviceDurations: {
+      ...DEFAULT_SERVICE_DURATIONS,
+      ...serviceDurations
+    },
     stylists,
     holdMinutes: Number(source.holdMinutes || HOLD_MINUTES),
     weeklyHours: {
@@ -323,22 +364,26 @@ function manualBlockAppliesToStylist(entry, stylist) {
   return entryStylist === requestedStylist;
 }
 
-function bookingBlocksSlot(booking, date, time, stylist, excludeBookingId = "") {
+function bookingBlocksSlot(booking, date, time, stylist, settings, service = "", durationOverrideMinutes = null, excludeBookingId = "") {
   const id = booking.bookingId || booking.id;
-  return (
-    id !== excludeBookingId &&
-    booking.date === date &&
-    booking.time === time &&
-    stylistsConflict(booking.stylist || ANY_STYLIST, stylist || ANY_STYLIST) &&
-    activeBookingBlocksSlot(booking)
-  );
+  if (id === excludeBookingId) return false;
+  if (booking.date !== date) return false;
+  if (!stylistsConflict(booking.stylist || ANY_STYLIST, stylist || ANY_STYLIST)) return false;
+  if (!activeBookingBlocksSlot(booking)) return false;
+
+  const start = parseTime(time);
+  const end = start + serviceDuration(settings, service, durationOverrideMinutes);
+  const bookingStart = parseTime(booking.time);
+  const bookingEnd = bookingStart + serviceDuration(settings, booking.service, booking.durationOverrideMinutes);
+  return intervalsOverlap(start, end, bookingStart, bookingEnd);
 }
 
-function bookingForAdmin(booking) {
+function bookingForAdmin(booking, settings = normalizeSettings()) {
   return {
     ...booking,
     holdActive: booking.status === "pending" && activeBookingBlocksSlot(booking),
-    blocksSlot: booking.status === "confirmed"
+    blocksSlot: booking.status === "confirmed",
+    durationMinutes: serviceDuration(settings, booking.service, booking.durationOverrideMinutes)
   };
 }
 
@@ -348,7 +393,7 @@ function sortBookings(bookings) {
   );
 }
 
-function buildSlots(date, settings, entries, bookings, stylist = ANY_STYLIST, excludeBookingId = "") {
+function buildSlots(date, settings, entries, bookings, stylist = ANY_STYLIST, service = "", durationOverrideMinutes = null, excludeBookingId = "") {
   const d = new Date(`${date}T00:00:00`);
   if (Number.isNaN(d.getTime())) throw new Error("Invalid date format.");
   const weekday = DAY_ORDER[(d.getDay() + 6) % 7];
@@ -362,23 +407,26 @@ function buildSlots(date, settings, entries, bookings, stylist = ANY_STYLIST, ex
   const open = parseTime(hours.open);
   const close = parseTime(hours.close);
   const step = Number(settings.slotDurationMinutes || 30);
+  const duration = serviceDuration(settings, service, durationOverrideMinutes);
   const blockedRanges = sameDate
     .filter((item) => item.status === "blocked" && manualBlockAppliesToStylist(item, stylist))
     .map((item) => [parseTime(item.start_time), parseTime(item.end_time)]);
   const now = businessNowParts();
 
   const slots = [];
-  for (let cursor = open; cursor + step <= close; cursor += step) {
+  for (let cursor = open; cursor + duration <= close; cursor += step) {
     if (date === now.date && cursor <= now.minutes) continue;
-    const blocked = blockedRanges.some(([start, end]) => cursor >= start && cursor < end);
+    const blocked = blockedRanges.some(([start, end]) => intervalsOverlap(cursor, cursor + duration, start, end));
     if (blocked) continue;
     const hh = Math.floor(cursor / 60);
     const mm = cursor % 60;
     const value = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
-    const booked = bookings.some((booking) => bookingBlocksSlot(booking, date, value, stylist, excludeBookingId));
+    const booked = bookings.some((booking) =>
+      bookingBlocksSlot(booking, date, value, stylist, settings, service, durationOverrideMinutes, excludeBookingId)
+    );
     if (!booked) slots.push({ value, label: labelTime(value) });
   }
-  return { date, stylist, closed: false, reason: "", slots };
+  return { date, stylist, service, serviceDurationMinutes: duration, closed: false, reason: "", slots };
 }
 
 function validateBookingBody(body, settings) {
@@ -521,8 +569,9 @@ export default async (req, context) => {
     if (method === "GET" && route === "availability") {
       const date = url.searchParams.get("date");
       const stylist = url.searchParams.get("stylist") || ANY_STYLIST;
+      const service = url.searchParams.get("service") || "";
       if (!date) return jsonResponse(400, { error: "date is required" });
-      return jsonResponse(200, buildSlots(date, settings, entries, bookings, stylist));
+      return jsonResponse(200, buildSlots(date, settings, entries, bookings, stylist, service));
     }
 
     if (method === "POST" && route === "bookings") {
@@ -533,10 +582,10 @@ export default async (req, context) => {
         return jsonResponse(400, { error: error.message, code: "invalid_booking" });
       }
 
-      const availability = buildSlots(payload.date, settings, entries, bookings, payload.stylist);
+      const availability = buildSlots(payload.date, settings, entries, bookings, payload.stylist, payload.service);
       const slotAvailable = availability.slots.some((slot) => slot.value === payload.time);
       const alreadyHeld = bookings.some((booking) =>
-        bookingBlocksSlot(booking, payload.date, payload.time, payload.stylist)
+        bookingBlocksSlot(booking, payload.date, payload.time, payload.stylist, settings, payload.service)
       );
       if (!slotAvailable || alreadyHeld) {
         return jsonResponse(409, {
@@ -571,8 +620,9 @@ export default async (req, context) => {
       return jsonResponse(200, {
         csv_text: entriesToCsv(entries),
         entries: entries.map((entry, row_index) => ({ ...entry, row_index })),
-        bookings: sortBookings(bookings).map(bookingForAdmin),
+        bookings: sortBookings(bookings).map((booking) => bookingForAdmin(booking, settings)),
         settings,
+        today_available_slots: buildSlots(businessToday(), settings, entries, bookings).slots.length,
         config_warning: Boolean(getAdminConfigProblem())
       });
     }
@@ -589,6 +639,13 @@ export default async (req, context) => {
       if (!booking) return jsonResponse(404, { error: "Booking not found." });
 
       if (nextStatus === "confirmed") {
+        if ("durationOverrideMinutes" in body) {
+          try {
+            booking.durationOverrideMinutes = normalizeDurationOverride(settings, booking.service, body.durationOverrideMinutes);
+          } catch (error) {
+            return jsonResponse(400, { error: error.message });
+          }
+        }
         if (booking.status === "expired") {
           return jsonResponse(409, {
             error: "This pending hold has expired. Ask the client to submit a new booking.",
@@ -598,12 +655,35 @@ export default async (req, context) => {
         if (!["pending", "confirmed"].includes(booking.status)) {
           return jsonResponse(409, { error: "Only pending bookings can be confirmed." });
         }
+        const conflictingBooking = bookings.find((item) =>
+          item.status === "confirmed" &&
+          bookingBlocksSlot(
+            item,
+            booking.date,
+            booking.time,
+            booking.stylist || ANY_STYLIST,
+            settings,
+            booking.service || "",
+            booking.durationOverrideMinutes,
+            bookingId
+          )
+        );
+        if (conflictingBooking) {
+          return jsonResponse(409, {
+            error:
+              "This duration overlaps another active booking. Please reduce the duration, choose another time, or cancel the conflicting booking first.",
+            code: "duration_conflict",
+            conflictingBookingId: conflictingBooking.bookingId || conflictingBooking.id
+          });
+        }
         const availability = buildSlots(
           booking.date,
           settings,
           entries,
           bookings,
           booking.stylist || ANY_STYLIST,
+          booking.service || "",
+          booking.durationOverrideMinutes,
           bookingId
         );
         if (!availability.slots.some((slot) => slot.value === booking.time)) {
@@ -620,7 +700,26 @@ export default async (req, context) => {
       }
 
       await store.setJSON(BOOKINGS_KEY, bookings);
-      return jsonResponse(200, { ok: true, booking: bookingForAdmin(booking) });
+      return jsonResponse(200, { ok: true, booking: bookingForAdmin(booking, settings) });
+    }
+
+    if (method === "POST" && route === "admin/update-booking-note") {
+      const body = await req.json();
+      const bookingId = String(body.bookingId || body.id || "").trim();
+      const privateNote = String(body.privateNote || "").trim().slice(0, 600);
+      const durationOverride = body.durationOverrideMinutes;
+      const booking = bookings.find((item) => (item.bookingId || item.id) === bookingId);
+      if (!booking) return jsonResponse(404, { error: "Booking not found." });
+
+      booking.privateNote = privateNote;
+      try {
+        booking.durationOverrideMinutes = normalizeDurationOverride(settings, booking.service, durationOverride);
+      } catch (error) {
+        return jsonResponse(400, { error: error.message });
+      }
+      booking.noteUpdatedAt = isoNow();
+      await store.setJSON(BOOKINGS_KEY, bookings);
+      return jsonResponse(200, { ok: true, booking: bookingForAdmin(booking, settings) });
     }
 
     if (method === "POST" && route === "admin/upload-csv") {

@@ -34,6 +34,15 @@ DEFAULT_SERVICES = [
     "Scalp Care",
     "Wash & Blow",
 ]
+DEFAULT_SERVICE_DURATIONS = {
+    "Haircut & Styling": 60,
+    "Hair Coloring": 150,
+    "Hair Treatment": 90,
+    "Rebonding / Smoothing": 180,
+    "Perm": 150,
+    "Scalp Care": 60,
+    "Wash & Blow": 45,
+}
 DEFAULT_STYLISTS = [
     {"name": "Aria Lim", "level": "Director"},
     {"name": "Elena Choo", "level": "Director"},
@@ -50,6 +59,7 @@ DEFAULT_SETTINGS = {
     "slotDurationMinutes": 30,
     "holdMinutes": HOLD_MINUTES,
     "services": DEFAULT_SERVICES,
+    "serviceDurations": DEFAULT_SERVICE_DURATIONS,
     "stylists": DEFAULT_STYLISTS,
     "weeklyHours": {
         "monday": {"open": "11:30", "close": "20:00"},
@@ -125,6 +135,7 @@ def read_settings():
     for key, value in DEFAULT_SETTINGS.items():
         settings.setdefault(key, value)
     settings.setdefault("services", DEFAULT_SERVICES)
+    settings.setdefault("serviceDurations", DEFAULT_SERVICE_DURATIONS)
     settings.setdefault("stylists", DEFAULT_STYLISTS)
     settings.setdefault("holdMinutes", HOLD_MINUTES)
     return settings
@@ -229,16 +240,24 @@ def manual_block_applies_to_stylist(entry, stylist):
     return entry_stylist == requested_stylist
 
 
-def booking_blocks_slot(booking, date, time, stylist, exclude_booking_id=None):
+def booking_blocks_slot(booking, date, time, stylist, settings, service=None, duration_override_minutes=None, exclude_booking_id=None):
     booking_id = booking.get("bookingId") or booking.get("id")
     if exclude_booking_id and booking_id == exclude_booking_id:
         return False
-    return (
-        booking.get("date") == date
-        and booking.get("time") == time
-        and stylists_conflict(booking.get("stylist") or ANY_STYLIST, stylist or ANY_STYLIST)
-        and active_booking_blocks_slot(booking)
+    if booking.get("date") != date:
+        return False
+    if not stylists_conflict(booking.get("stylist") or ANY_STYLIST, stylist or ANY_STYLIST):
+        return False
+    if not active_booking_blocks_slot(booking):
+        return False
+
+    candidate_start = parse_time(time)
+    candidate_end = candidate_start + timedelta(minutes=get_service_duration(settings, service, duration_override_minutes))
+    booking_start = parse_time(booking.get("time"))
+    booking_end = booking_start + timedelta(
+        minutes=get_service_duration(settings, booking.get("service"), booking.get("durationOverrideMinutes"))
     )
+    return intervals_overlap(candidate_start, candidate_end, booking_start, booking_end)
 
 
 def generate_booking_id(existing_bookings):
@@ -255,6 +274,7 @@ def booking_for_admin(booking):
     item = booking.copy()
     item["holdActive"] = active_booking_blocks_slot(booking) and booking.get("status") == "pending"
     item["blocksSlot"] = booking.get("status") == "confirmed"
+    item["durationMinutes"] = get_service_duration(read_settings(), booking.get("service"), booking.get("durationOverrideMinutes"))
     return item
 
 
@@ -446,13 +466,38 @@ def parse_time(value):
     return datetime.strptime(value, "%H:%M")
 
 
+def get_service_duration(settings, service, override_minutes=None):
+    if override_minutes not in (None, ""):
+        try:
+            override = int(override_minutes)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Duration override must be a number.") from exc
+        if override < 15 or override > 480:
+            raise ValueError("Duration override must be between 15 and 480 minutes.")
+        return override
+    durations = settings.get("serviceDurations", DEFAULT_SERVICE_DURATIONS)
+    return int(durations.get(service, settings.get("slotDurationMinutes", 30)))
+
+
+def normalize_duration_override(settings, service, override_minutes):
+    if override_minutes in (None, ""):
+        return None
+    override = get_service_duration(settings, service, override_minutes)
+    default = get_service_duration(settings, service)
+    return None if override == default else override
+
+
+def intervals_overlap(start, end, other_start, other_end):
+    return start < other_end and other_start < end
+
+
 def minutes_to_label(value):
     dt = datetime.strptime(value, "%H:%M")
     label = dt.strftime("%I:%M %p")
     return label.lstrip("0")
 
 
-def generate_slots_for_date(date_str, stylist=ANY_STYLIST, exclude_booking_id=None):
+def generate_slots_for_date(date_str, stylist=ANY_STYLIST, service=None, duration_override_minutes=None, exclude_booking_id=None):
     settings = read_settings()
     _, entries = read_availability_entries()
     bookings = read_bookings()
@@ -489,8 +534,9 @@ def generate_slots_for_date(date_str, stylist=ANY_STYLIST, exclude_booking_id=No
     close_time = parse_time(hours["close"])
     current = open_time
     slots = []
+    service_duration = get_service_duration(settings, service, duration_override_minutes)
 
-    while current + timedelta(minutes=slot_duration) <= close_time:
+    while current + timedelta(minutes=service_duration) <= close_time:
         slots.append(current.strftime("%H:%M"))
         current += timedelta(minutes=slot_duration)
 
@@ -508,8 +554,21 @@ def generate_slots_for_date(date_str, stylist=ANY_STYLIST, exclude_booking_id=No
         slot_time = parse_time(slot)
         if is_today and slot_time <= current_time:
             continue
-        is_blocked = any(start <= slot_time < end for start, end in blocked_ranges)
-        is_booked = any(booking_blocks_slot(booking, date_str, slot, stylist, exclude_booking_id) for booking in bookings)
+        slot_end = slot_time + timedelta(minutes=service_duration)
+        is_blocked = any(intervals_overlap(slot_time, slot_end, start, end) for start, end in blocked_ranges)
+        is_booked = any(
+            booking_blocks_slot(
+                booking,
+                date_str,
+                slot,
+                stylist,
+                settings,
+                service,
+                duration_override_minutes,
+                exclude_booking_id,
+            )
+            for booking in bookings
+        )
         if not is_blocked and not is_booked:
             available_slots.append(
                 {
@@ -521,6 +580,8 @@ def generate_slots_for_date(date_str, stylist=ANY_STYLIST, exclude_booking_id=No
     return {
         "date": date_str,
         "stylist": stylist or ANY_STYLIST,
+        "service": service or "",
+        "serviceDurationMinutes": service_duration,
         "closed": False,
         "reason": "",
         "slots": available_slots
@@ -590,6 +651,8 @@ class KyaSalonHandler(BaseHTTPRequestHandler):
             return self.handle_create_booking()
         if parsed.path == "/api/admin/update-booking-status":
             return self.handle_admin_update_booking_status()
+        if parsed.path == "/api/admin/update-booking-note":
+            return self.handle_admin_update_booking_note()
 
         self.send_error(404, "Not found")
 
@@ -646,8 +709,9 @@ class KyaSalonHandler(BaseHTTPRequestHandler):
 
         date_str = date_values[0]
         stylist = (params.get("stylist", [ANY_STYLIST])[0] or ANY_STYLIST).strip()
+        service = (params.get("service", [""])[0] or "").strip()
         try:
-            payload = generate_slots_for_date(date_str, stylist)
+            payload = generate_slots_for_date(date_str, stylist, service)
         except ValueError:
             return self.write_json({"error": "invalid date format"}, status=400)
         except Exception as exc:
@@ -707,6 +771,7 @@ class KyaSalonHandler(BaseHTTPRequestHandler):
                 "entries": entries_with_row_ids,
                 "bookings": [booking_for_admin(booking) for booking in sort_bookings(read_bookings())],
                 "settings": read_settings(),
+                "today_available_slots": len(generate_slots_for_date(business_today().strftime("%Y-%m-%d"))["slots"]),
                 "config_warning": read_admin_config().get("admin_password") == "change-this-password"
             }
         )
@@ -718,7 +783,7 @@ class KyaSalonHandler(BaseHTTPRequestHandler):
             return self.write_json({"error": str(exc), "code": "invalid_booking"}, status=400)
 
         try:
-            availability = generate_slots_for_date(payload["date"], payload["stylist"])
+            availability = generate_slots_for_date(payload["date"], payload["stylist"], payload["service"])
         except ValueError:
             return self.write_json({"error": "Invalid date format.", "code": "invalid_date"}, status=400)
 
@@ -732,7 +797,8 @@ class KyaSalonHandler(BaseHTTPRequestHandler):
             )
 
         bookings = read_bookings()
-        if any(booking_blocks_slot(booking, payload["date"], payload["time"], payload["stylist"]) for booking in bookings):
+        settings = read_settings()
+        if any(booking_blocks_slot(booking, payload["date"], payload["time"], payload["stylist"], settings, payload["service"]) for booking in bookings):
             return self.write_json(
                 {
                     "error": "Slot already taken or no longer available. Please choose another time.",
@@ -775,6 +841,13 @@ class KyaSalonHandler(BaseHTTPRequestHandler):
 
         now = utc_now()
         if next_status == "confirmed":
+            if "durationOverrideMinutes" in payload:
+                override = payload.get("durationOverrideMinutes")
+                try:
+                    booking["durationOverrideMinutes"] = normalize_duration_override(read_settings(), booking.get("service"), override)
+                except ValueError as exc:
+                    return self.write_json({"error": str(exc)}, status=400)
+
             if booking.get("status") == "pending":
                 expires_at = parse_iso_utc(booking.get("expiresAt"))
                 if expires_at and expires_at <= now:
@@ -788,9 +861,38 @@ class KyaSalonHandler(BaseHTTPRequestHandler):
             if booking.get("status") not in {"pending", "confirmed"}:
                 return self.write_json({"error": "Only pending bookings can be confirmed."}, status=409)
 
+            settings = read_settings()
+            conflicting_booking = next(
+                (
+                    item for item in bookings
+                    if item.get("status") == "confirmed" and booking_blocks_slot(
+                        item,
+                        booking["date"],
+                        booking["time"],
+                        booking.get("stylist") or ANY_STYLIST,
+                        settings,
+                        booking.get("service"),
+                        booking.get("durationOverrideMinutes"),
+                        booking_id,
+                    )
+                ),
+                None,
+            )
+            if conflicting_booking:
+                return self.write_json(
+                    {
+                        "error": "This duration overlaps another active booking. Please reduce the duration, choose another time, or cancel the conflicting booking first.",
+                        "code": "duration_conflict",
+                        "conflictingBookingId": conflicting_booking.get("bookingId") or conflicting_booking.get("id"),
+                    },
+                    status=409,
+                )
+
             availability = generate_slots_for_date(
                 booking["date"],
                 booking.get("stylist") or ANY_STYLIST,
+                booking.get("service"),
+                booking.get("durationOverrideMinutes"),
                 exclude_booking_id=booking_id,
             )
             if not any(slot["value"] == booking["time"] for slot in availability["slots"]):
@@ -808,6 +910,28 @@ class KyaSalonHandler(BaseHTTPRequestHandler):
         else:
             booking["status"] = "expired"
 
+        write_bookings(bookings)
+        return self.write_json({"ok": True, "booking": booking_for_admin(booking)})
+
+    def handle_admin_update_booking_note(self):
+        if not is_authenticated(self):
+            return self.write_json({"error": "Unauthorized"}, status=401)
+
+        payload = self.read_json_body()
+        booking_id = (payload.get("bookingId") or payload.get("id") or "").strip()
+        private_note = (payload.get("privateNote") or "").strip()[:600]
+        duration_override = payload.get("durationOverrideMinutes")
+        bookings = read_bookings()
+        booking = next((item for item in bookings if (item.get("bookingId") or item.get("id")) == booking_id), None)
+        if not booking:
+            return self.write_json({"error": "Booking not found."}, status=404)
+
+        booking["privateNote"] = private_note
+        try:
+            booking["durationOverrideMinutes"] = normalize_duration_override(read_settings(), booking.get("service"), duration_override)
+        except ValueError as exc:
+            return self.write_json({"error": str(exc)}, status=400)
+        booking["noteUpdatedAt"] = isoformat_utc(utc_now())
         write_bookings(bookings)
         return self.write_json({"ok": True, "booking": booking_for_admin(booking)})
 

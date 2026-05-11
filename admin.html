@@ -65,6 +65,17 @@
                 Admin security is not fully configured. Set a real admin password and session secret before launch.
               </div>
 
+              <div class="admin-summary-grid" data-admin-summary></div>
+
+              <details class="admin-card admin-info-card">
+                <summary>Service duration defaults</summary>
+                <div class="admin-info-grid">
+                  <div><h3>Cut & Styling</h3><p class="muted">Haircut & Styling: 60 min<br>Wash & Blow: 45 min</p></div>
+                  <div><h3>Colour & Texture</h3><p class="muted">Hair Coloring: 150 min<br>Rebonding / Smoothing: 180 min<br>Perm: 150 min</p></div>
+                  <div><h3>Treatment & Care</h3><p class="muted">Hair Treatment: 90 min<br>Scalp Care: 60 min</p><p class="muted">Staff can override the duration inside each booking before confirming when a client needs more or less time.</p></div>
+                </div>
+              </details>
+
               <div class="admin-card">
                 <div class="admin-section-title">
                   <div>
@@ -72,6 +83,27 @@
                     <h3>Bookings by date</h3>
                   </div>
                   <p class="muted">Pending slots are held for 10 minutes. Confirmed bookings permanently block the stylist and time slot.</p>
+                </div>
+                <div class="admin-filter-bar">
+                  <div class="field">
+                    <label for="booking-status-filter">Status</label>
+                    <select id="booking-status-filter" data-booking-filter-status>
+                      <option value="all">All bookings</option>
+                      <option value="pending">Pending</option>
+                      <option value="confirmed">Confirmed</option>
+                      <option value="cancelled">Cancelled</option>
+                      <option value="expired">Expired</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="booking-from-filter">From</label>
+                    <input id="booking-from-filter" type="date" data-booking-filter-from>
+                  </div>
+                  <div class="field">
+                    <label for="booking-to-filter">To</label>
+                    <input id="booking-to-filter" type="date" data-booking-filter-to>
+                  </div>
+                  <button class="button outline-dark" type="button" data-booking-filter-clear>Clear Filters</button>
                 </div>
                 <div class="booking-groups" data-admin-bookings></div>
               </div>

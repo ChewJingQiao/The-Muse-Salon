@@ -115,18 +115,29 @@ if (appointmentForm) {
   const stylistField = appointmentForm.querySelector("#stylist");
   const phoneField = appointmentForm.querySelector("#phone");
   const availabilityFeedback = appointmentForm.querySelector("[data-availability-feedback]");
+  const availabilityCalendar = appointmentForm.querySelector("[data-availability-calendar]");
   const submitButton = appointmentForm.querySelector("button[type='submit']");
   const formPanel = document.querySelector("[data-booking-form-panel]");
   const confirmationPanel = document.querySelector("[data-booking-confirmation]");
   const bookingSummary = document.querySelector("[data-booking-summary]");
   const bookingWhatsapp = document.querySelector("[data-booking-whatsapp]");
+  const bookingCopy = document.querySelector("[data-booking-copy]");
   const bookingNew = document.querySelector("[data-booking-new]");
+  let holdCountdownTimer = null;
+  let latestBookingMessage = "";
 
   const today = new Date();
   const yyyy = today.getFullYear();
   const mm = String(today.getMonth() + 1).padStart(2, "0");
   const dd = String(today.getDate()).padStart(2, "0");
   dateField.min = `${yyyy}-${mm}-${dd}`;
+
+  const slotPeriod = (value) => {
+    const hour = Number(value.split(":")[0]);
+    if (hour < 12) return "Morning";
+    if (hour < 17) return "Afternoon";
+    return "Evening";
+  };
 
   const setTimeOptions = (options, placeholder, disabled = false) => {
     timeField.innerHTML = "";
@@ -135,11 +146,24 @@ if (appointmentForm) {
     first.textContent = placeholder;
     timeField.appendChild(first);
 
-    options.forEach((option) => {
-      const node = document.createElement("option");
-      node.value = option.value;
-      node.textContent = option.label;
-      timeField.appendChild(node);
+    const grouped = options.reduce((acc, option) => {
+      const period = slotPeriod(option.value);
+      acc[period] = acc[period] || [];
+      acc[period].push(option);
+      return acc;
+    }, {});
+
+    ["Morning", "Afternoon", "Evening"].forEach((period) => {
+      if (!grouped[period]) return;
+      const group = document.createElement("optgroup");
+      group.label = period;
+      grouped[period].forEach((option) => {
+        const node = document.createElement("option");
+        node.value = option.value;
+        node.textContent = option.label;
+        group.appendChild(node);
+      });
+      timeField.appendChild(group);
     });
 
     timeField.disabled = disabled;
@@ -158,6 +182,21 @@ if (appointmentForm) {
     const [hours, minutes] = value.split(":").map(Number);
     const suffix = hours >= 12 ? "PM" : "AM";
     return `${hours % 12 || 12}:${String(minutes).padStart(2, "0")} ${suffix}`;
+  };
+
+  const addDays = (dateString, days) => {
+    const date = new Date(`${dateString}T00:00:00`);
+    date.setDate(date.getDate() + days);
+    return [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, "0"),
+      String(date.getDate()).padStart(2, "0")
+    ].join("-");
+  };
+
+  const shortDate = (dateString) => {
+    const date = new Date(`${dateString}T00:00:00`);
+    return date.toLocaleDateString("en-MY", { weekday: "short", month: "short", day: "numeric" });
   };
 
   const formatDateTime = (value) => {
@@ -184,6 +223,26 @@ if (appointmentForm) {
     `Remarks: ${booking.remarks || "-"}`
   ].join("\n");
 
+  const updateHoldCountdown = (booking) => {
+    if (holdCountdownTimer) window.clearInterval(holdCountdownTimer);
+    const heading = confirmationPanel.querySelector("h3");
+
+    const tick = () => {
+      const remainingMs = new Date(booking.expiresAt).getTime() - Date.now();
+      if (remainingMs <= 0) {
+        heading.textContent = "Your temporary hold has expired.";
+        window.clearInterval(holdCountdownTimer);
+        return;
+      }
+      const minutes = Math.floor(remainingMs / 60000);
+      const seconds = Math.floor((remainingMs % 60000) / 1000);
+      heading.textContent = `Your slot is held for ${minutes}:${String(seconds).padStart(2, "0")}.`;
+    };
+
+    tick();
+    holdCountdownTimer = window.setInterval(tick, 1000);
+  };
+
   const showBookingConfirmation = (booking, holdMinutes) => {
     bookingSummary.innerHTML = [
       ["Booking ID", booking.bookingId],
@@ -198,19 +257,57 @@ if (appointmentForm) {
       ["Held until", formatDateTime(booking.expiresAt)]
     ].map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("");
 
-    bookingWhatsapp.href = `https://wa.me/${siteConfig.whatsappNumber}?text=${encodeURIComponent(buildBookingMessage(booking))}`;
+    latestBookingMessage = buildBookingMessage(booking);
+    bookingWhatsapp.href = `https://wa.me/${siteConfig.whatsappNumber}?text=${encodeURIComponent(latestBookingMessage)}`;
     confirmationPanel.hidden = false;
     formPanel.hidden = true;
-    confirmationPanel.querySelector("h3").textContent = `Your slot is held for ${holdMinutes || 10} minutes.`;
+    updateHoldCountdown(booking, holdMinutes);
     confirmationPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const loadAvailabilityCalendar = async (date, service, stylist) => {
+    if (!availabilityCalendar) return;
+    if (!date || !service || !stylist) {
+      availabilityCalendar.innerHTML = "";
+      return;
+    }
+
+    const dates = Array.from({ length: 7 }, (_, index) => addDays(date, index));
+    availabilityCalendar.innerHTML = '<p class="mini-calendar-note">Checking the next few days...</p>';
+
+    try {
+      const results = await Promise.all(dates.map(async (itemDate) => {
+        const response = await fetch(`/api/availability?date=${encodeURIComponent(itemDate)}&stylist=${encodeURIComponent(stylist)}&service=${encodeURIComponent(service)}`);
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "Could not load availability preview.");
+        return payload;
+      }));
+
+      availabilityCalendar.innerHTML = results.map((item) => {
+        const count = item.slots?.length || 0;
+        const status = item.closed ? "closed" : count === 0 ? "full" : count <= 3 ? "limited" : "available";
+        const label = item.closed ? "Closed" : count === 0 ? "Full" : count <= 3 ? "Limited" : "Available";
+        return `
+          <button class="mini-day ${status}${item.date === dateField.value ? " active" : ""}" type="button" data-calendar-date="${escapeHtml(item.date)}">
+            <span>${escapeHtml(shortDate(item.date))}</span>
+            <strong>${escapeHtml(label)}</strong>
+            <small>${count ? `${count} slots` : item.reason || "No slots"}</small>
+          </button>
+        `;
+      }).join("");
+    } catch (error) {
+      availabilityCalendar.innerHTML = `<p class="mini-calendar-note">${escapeHtml(error.message)}</p>`;
+    }
   };
 
   const loadAvailability = async () => {
     const date = dateField.value;
     const stylist = stylistField.value;
-    if (!stylist || !date) {
-      setTimeOptions([], "Select stylist and date first", true);
-      availabilityFeedback.textContent = "Choose a stylist and date to view available appointment times.";
+    const service = serviceField.value;
+    if (!service || !stylist || !date) {
+      setTimeOptions([], "Select service, stylist and date first", true);
+      availabilityFeedback.textContent = "Choose a service, stylist and date to view available appointment times.";
+      await loadAvailabilityCalendar(date, service, stylist);
       return;
     }
 
@@ -218,7 +315,7 @@ if (appointmentForm) {
     setTimeOptions([], "Loading available slots...", true);
 
     try {
-      const response = await fetch(`/api/availability?date=${encodeURIComponent(date)}&stylist=${encodeURIComponent(stylist)}`);
+      const response = await fetch(`/api/availability?date=${encodeURIComponent(date)}&stylist=${encodeURIComponent(stylist)}&service=${encodeURIComponent(service)}`);
       const payload = await response.json();
 
       if (!response.ok) {
@@ -228,17 +325,20 @@ if (appointmentForm) {
       if (payload.closed) {
         setTimeOptions([], "No slots available", true);
         availabilityFeedback.textContent = payload.reason || "The salon is unavailable on this date.";
+        await loadAvailabilityCalendar(date, service, stylist);
         return;
       }
 
       if (!payload.slots.length) {
         setTimeOptions([], "No slots available", true);
         availabilityFeedback.textContent = "No slots are available for this stylist on this date. Please choose another date or stylist.";
+        await loadAvailabilityCalendar(date, service, stylist);
         return;
       }
 
       setTimeOptions(payload.slots, "Select a preferred time");
-      availabilityFeedback.textContent = `${payload.slots.length} slot(s) available for this date.`;
+      availabilityFeedback.textContent = `${payload.slots.length} slot(s) available. Estimated service time: ${payload.serviceDurationMinutes || 30} minutes.`;
+      await loadAvailabilityCalendar(date, service, stylist);
     } catch (error) {
       setTimeOptions([], "Could not load slots", true);
       availabilityFeedback.textContent = error.message;
@@ -248,6 +348,19 @@ if (appointmentForm) {
   serviceField.addEventListener("change", loadAvailability);
   stylistField.addEventListener("change", loadAvailability);
   dateField.addEventListener("change", loadAvailability);
+  availabilityCalendar?.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-calendar-date]");
+    if (!button) return;
+    dateField.value = button.dataset.calendarDate;
+    loadAvailability();
+  });
+
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("service")) serviceField.value = params.get("service");
+  if (params.get("stylist")) stylistField.value = params.get("stylist");
+  if (serviceField.value || stylistField.value) {
+    availabilityFeedback.textContent = "Preselected from your previous page. Choose a date to continue.";
+  }
 
   appointmentForm.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -304,10 +417,39 @@ if (appointmentForm) {
   });
 
   bookingNew?.addEventListener("click", () => {
+    if (holdCountdownTimer) window.clearInterval(holdCountdownTimer);
+    latestBookingMessage = "";
     appointmentForm.reset();
-    setTimeOptions([], "Select stylist and date first", true);
-    availabilityFeedback.textContent = "Choose a stylist and date to view available appointment times.";
+    setTimeOptions([], "Select service, stylist and date first", true);
+    availabilityFeedback.textContent = "Choose a service, stylist and date to view available appointment times.";
+    if (availabilityCalendar) availabilityCalendar.innerHTML = "";
     confirmationPanel.hidden = true;
     formPanel.hidden = false;
+  });
+
+  bookingCopy?.addEventListener("click", async () => {
+    if (!latestBookingMessage) return;
+    const originalText = bookingCopy.textContent;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(latestBookingMessage);
+      } else {
+        const fallback = document.createElement("textarea");
+        fallback.value = latestBookingMessage;
+        document.body.appendChild(fallback);
+        fallback.select();
+        document.execCommand("copy");
+        fallback.remove();
+      }
+      bookingCopy.textContent = "Copied";
+      window.setTimeout(() => {
+        bookingCopy.textContent = originalText;
+      }, 1800);
+    } catch {
+      bookingCopy.textContent = "Copy failed";
+      window.setTimeout(() => {
+        bookingCopy.textContent = originalText;
+      }, 1800);
+    }
   });
 }

@@ -2,6 +2,15 @@
   "timezone": "Asia/Kuala_Lumpur",
   "slotDurationMinutes": 30,
   "holdMinutes": 10,
+  "serviceDurations": {
+    "Haircut & Styling": 60,
+    "Hair Coloring": 150,
+    "Hair Treatment": 90,
+    "Rebonding / Smoothing": 180,
+    "Perm": 150,
+    "Scalp Care": 60,
+    "Wash & Blow": 45
+  },
   "services": [
     "Haircut & Styling",
     "Hair Coloring",

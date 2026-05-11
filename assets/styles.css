@@ -883,6 +883,59 @@ p {
   font-size: .9rem;
 }
 
+.availability-calendar {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.mini-day {
+  display: grid;
+  gap: 4px;
+  min-height: 86px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(255, 253, 248, .72);
+  padding: 10px;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+
+.mini-day:hover,
+.mini-day.active {
+  border-color: rgba(201, 164, 93, .7);
+  background: rgba(201, 164, 93, .1);
+}
+
+.mini-day span,
+.mini-day small,
+.mini-calendar-note {
+  color: var(--muted);
+  font-size: .78rem;
+}
+
+.mini-day strong {
+  font-size: .86rem;
+}
+
+.mini-day.full,
+.mini-day.closed {
+  opacity: .66;
+}
+
+.mini-day.limited strong {
+  color: var(--gold-deep);
+}
+
+.mini-day.available strong {
+  color: #1f6a3d;
+}
+
+.mini-calendar-note {
+  grid-column: 1 / -1;
+}
+
 .booking-confirmation {
   display: grid;
   gap: 18px;
@@ -988,6 +1041,61 @@ p {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18px;
   margin-bottom: 18px;
+}
+
+.admin-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.admin-summary-card {
+  border: 1px solid var(--line);
+  background: rgba(255, 250, 242, .82);
+  padding: 18px;
+}
+
+.admin-summary-card span {
+  display: block;
+  color: var(--muted);
+  font-size: .78rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.admin-summary-card strong {
+  display: block;
+  margin-top: 8px;
+  font-family: var(--serif);
+  font-size: 2.4rem;
+  line-height: 1;
+}
+
+.admin-filter-bar {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.1fr) repeat(2, minmax(140px, .8fr)) auto;
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 18px;
+}
+
+.admin-info-card summary {
+  cursor: pointer;
+  font-family: var(--serif);
+  font-size: 1.35rem;
+}
+
+.admin-info-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.admin-info-grid h3 {
+  margin-bottom: 8px;
+  font-size: 1.35rem;
 }
 
 .admin-card {
@@ -1140,6 +1248,10 @@ p {
   gap: 8px;
 }
 
+.booking-date-pagination {
+  grid-column: 1 / -1;
+}
+
 .booking-card-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1263,6 +1375,42 @@ body.modal-open {
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 16px;
+}
+
+.admin-note-box {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.admin-note-box label {
+  color: var(--gold-deep);
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.admin-note-box textarea {
+  min-height: 76px;
+}
+
+.admin-note-box input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #fffdf8;
+  padding: 11px 12px;
+  color: var(--ink);
+}
+
+.duration-conflict {
+  border: 1px solid rgba(156, 58, 38, .24);
+  background: rgba(156, 58, 38, .08);
+  color: #8a3524;
+  padding: 10px 12px;
 }
 
 .status-pill {
@@ -1674,6 +1822,12 @@ body.modal-open {
     align-items: stretch;
   }
 
+  .admin-summary-grid,
+  .admin-filter-bar,
+  .admin-info-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .admin-block-form {
     grid-template-columns: 1fr;
   }
@@ -1776,6 +1930,12 @@ body.modal-open {
     font-size: clamp(2.15rem, 13vw, 3.2rem);
   }
 
+  .admin-summary-grid,
+  .admin-filter-bar,
+  .admin-info-grid {
+    grid-template-columns: 1fr;
+  }
+
   .admin-login-card,
   .admin-dashboard,
   .admin-card,
@@ -1791,6 +1951,10 @@ body.modal-open {
   .booking-card dl div {
     grid-template-columns: 1fr;
     gap: 2px;
+  }
+
+  .availability-calendar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .stylist-preview-card {
