@@ -1010,6 +1010,15 @@ p {
   max-width: 520px;
 }
 
+.admin-login-card h2 {
+  font-size: clamp(2rem, 4vw, 3.1rem);
+}
+
+.admin-login-intro {
+  margin: 14px 0 24px;
+  max-width: 360px;
+}
+
 .admin-dashboard {
   grid-column: 1 / -1;
 }
