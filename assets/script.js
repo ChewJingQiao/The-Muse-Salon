@@ -128,6 +128,7 @@ if (appointmentForm) {
   let holdCountdownTimer = null;
   let latestBookingMessage = "";
   const BOOKING_WINDOW_DAYS = 60;
+  const ANY_STYLIST = "Any available stylist";
 
   const malaysiaDateString = (date = new Date()) => {
     const parts = new Intl.DateTimeFormat("en-CA", {
@@ -199,6 +200,58 @@ if (appointmentForm) {
     '"': "&quot;",
     "'": "&#39;"
   }[char]));
+
+  const setSelectOptions = (select, options, placeholder) => {
+    const currentValue = select.value;
+    select.innerHTML = "";
+
+    const first = document.createElement("option");
+    first.value = "";
+    first.textContent = placeholder;
+    select.appendChild(first);
+
+    options.forEach((option) => {
+      const node = document.createElement("option");
+      node.value = option.value;
+      node.textContent = option.label;
+      select.appendChild(node);
+    });
+
+    if ([...select.options].some((option) => option.value === currentValue)) {
+      select.value = currentValue;
+    }
+  };
+
+  const loadBookingSettings = async () => {
+    try {
+      const response = await fetch("/api/settings");
+      if (!response.ok) return;
+      const settings = await response.json();
+
+      if (Array.isArray(settings.services) && settings.services.length) {
+        setSelectOptions(
+          serviceField,
+          settings.services.map((service) => ({ value: service, label: service })),
+          "Select a service"
+        );
+      }
+
+      if (Array.isArray(settings.stylists) && settings.stylists.length) {
+        const stylistOptions = [
+          { value: ANY_STYLIST, label: ANY_STYLIST },
+          ...settings.stylists
+            .filter((stylist) => stylist?.name)
+            .map((stylist) => ({
+              value: stylist.name,
+              label: `${stylist.name}${stylist.level ? ` - ${stylist.level}` : ""}`
+            }))
+        ];
+        setSelectOptions(stylistField, stylistOptions, "Select a stylist");
+      }
+    } catch {
+      // Static fallback options in the HTML keep the booking form usable.
+    }
+  };
 
   const isValidPhoneInput = (value) => {
     const raw = String(value || "").trim();
@@ -395,12 +448,17 @@ if (appointmentForm) {
     loadAvailability();
   });
 
-  const params = new URLSearchParams(window.location.search);
-  if (params.get("service")) serviceField.value = params.get("service");
-  if (params.get("stylist")) stylistField.value = params.get("stylist");
-  if (serviceField.value || stylistField.value) {
-    availabilityFeedback.textContent = "Preselected from your previous page. Choose a date to continue.";
-  }
+  const initialiseBookingForm = async () => {
+    await loadBookingSettings();
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("service")) serviceField.value = params.get("service");
+    if (params.get("stylist")) stylistField.value = params.get("stylist");
+    if (serviceField.value || stylistField.value) {
+      availabilityFeedback.textContent = "Preselected from your previous page. Choose a date to continue.";
+    }
+  };
+
+  initialiseBookingForm();
 
   appointmentForm.addEventListener("submit", async (event) => {
     event.preventDefault();

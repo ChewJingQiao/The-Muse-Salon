@@ -4,7 +4,7 @@ import { getStore } from "@netlify/blobs";
 const SESSION_COOKIE = "kya_admin_session";
 const SESSION_MAX_AGE_SECONDS = 8 * 60 * 60;
 const STORE_NAME = "kya-booking";
-const FUNCTION_VERSION = "2026-05-11-kya-booking-duration-override";
+const FUNCTION_VERSION = "2026-05-13-demo-ready";
 const ENTRIES_KEY = "availability-entries";
 const SETTINGS_KEY = "booking-settings";
 const BOOKINGS_KEY = "bookings";
@@ -426,6 +426,12 @@ function manualBlockAppliesToStylist(entry, stylist) {
   return entryStylist === requestedStylist;
 }
 
+function actualStylistNames(settings) {
+  return (settings.stylists || [])
+    .map((item) => String(item.name || "").trim())
+    .filter(Boolean);
+}
+
 function bookingBlocksSlot(booking, date, time, stylist, settings, service = "", durationOverrideMinutes = null, excludeBookingId = "") {
   const id = booking.bookingId || booking.id;
   if (id === excludeBookingId) return false;
@@ -487,6 +493,54 @@ function sortBookings(bookings) {
   );
 }
 
+function aggregateAnyStylistSlots(date, settings, entries, bookings, service = "", durationOverrideMinutes = null, excludeBookingId = "") {
+  const stylists = actualStylistNames(settings);
+  const duration = serviceDuration(settings, service, durationOverrideMinutes);
+  if (!stylists.length) {
+    return {
+      date,
+      stylist: ANY_STYLIST,
+      service,
+      serviceDurationMinutes: duration,
+      closed: true,
+      reason: "No stylists are configured.",
+      autoAssign: true,
+      slots: []
+    };
+  }
+
+  const results = stylists.map((stylist) =>
+    buildSlots(date, settings, entries, bookings, stylist, service, durationOverrideMinutes, excludeBookingId)
+  );
+  const slotsByValue = new Map();
+  for (const result of results) {
+    for (const slot of result.slots || []) {
+      if (!slotsByValue.has(slot.value)) slotsByValue.set(slot.value, slot);
+    }
+  }
+
+  const slots = [...slotsByValue.values()].sort((a, b) => a.value.localeCompare(b.value));
+  return {
+    date,
+    stylist: ANY_STYLIST,
+    service,
+    serviceDurationMinutes: duration,
+    closed: !slots.length && results.every((item) => item.closed),
+    reason: slots.length ? "" : results.find((item) => item.reason)?.reason || "No stylists are available on this date.",
+    autoAssign: true,
+    bookingWindowDays: MAX_ADVANCE_BOOKING_DAYS,
+    maxBookingDate: maxBookingDate(),
+    slots
+  };
+}
+
+function findAvailableStylistForSlot(payload, settings, entries, bookings) {
+  return actualStylistNames(settings).find((stylist) => {
+    const availability = buildSlots(payload.date, settings, entries, bookings, stylist, payload.service);
+    return availability.slots.some((slot) => slot.value === payload.time);
+  });
+}
+
 function buildSlots(date, settings, entries, bookings, stylist = ANY_STYLIST, service = "", durationOverrideMinutes = null, excludeBookingId = "") {
   const d = new Date(`${date}T00:00:00`);
   if (Number.isNaN(d.getTime())) throw new Error("Invalid date format.");
@@ -516,6 +570,9 @@ function buildSlots(date, settings, entries, bookings, stylist = ANY_STYLIST, se
       maxBookingDate: maxDate,
       slots: []
     };
+  }
+  if ((stylist || ANY_STYLIST) === ANY_STYLIST) {
+    return aggregateAnyStylistSlots(date, settings, entries, bookings, service, durationOverrideMinutes, excludeBookingId);
   }
   const weekday = DAY_ORDER[(d.getDay() + 6) % 7];
   const hours = settings.weeklyHours[weekday];
@@ -612,6 +669,7 @@ async function getStoreData() {
   const rawSettings = await store.get(SETTINGS_KEY, readOptions);
   const rawEntries = await store.get(ENTRIES_KEY, readOptions);
   const rawBookings = await store.get(BOOKINGS_KEY, readOptions);
+  const hasStoredSettings = rawSettings && typeof rawSettings === "object" && !Array.isArray(rawSettings);
   const settings = normalizeSettings(rawSettings);
   let entries = normalizeEntries(rawEntries);
   let bookings = normalizeBookings(rawBookings);
@@ -637,7 +695,7 @@ async function getStoreData() {
     await store.setJSON(BOOKINGS_KEY, bookings);
   }
 
-  await store.setJSON(SETTINGS_KEY, settings);
+  if (!hasStoredSettings) await store.setJSON(SETTINGS_KEY, settings);
   if (expireStaleBookings(bookings)) await store.setJSON(BOOKINGS_KEY, bookings);
 
   return { store, settings, entries, bookings };
@@ -687,6 +745,18 @@ function exportPayload(type, settings, entries, bookings) {
     };
   }
   throw new Error("Export type must be all, bookings, blocks, or settings.");
+}
+
+function publicSettingsPayload(settings) {
+  return {
+    services: settings.services,
+    serviceDurations: settings.serviceDurations,
+    stylists: settings.stylists,
+    slotDurationMinutes: Number(settings.slotDurationMinutes || 30),
+    holdMinutes: Number(settings.holdMinutes || HOLD_MINUTES),
+    bookingWindowDays: MAX_ADVANCE_BOOKING_DAYS,
+    maxBookingDate: maxBookingDate()
+  };
 }
 
 function routeFromContext(context, req) {
@@ -746,6 +816,10 @@ export default async (req, context) => {
 
     const { store, settings, entries, bookings } = await getStoreData();
 
+    if (method === "GET" && route === "settings") {
+      return jsonResponse(200, publicSettingsPayload(settings));
+    }
+
     if (method === "GET" && route === "availability") {
       const date = url.searchParams.get("date");
       const stylist = url.searchParams.get("stylist") || ANY_STYLIST;
@@ -760,6 +834,17 @@ export default async (req, context) => {
         payload = validateBookingBody(await req.json(), settings);
       } catch (error) {
         return jsonResponse(400, { error: error.message, code: "invalid_booking" });
+      }
+
+      if (payload.stylist === ANY_STYLIST) {
+        const assignedStylist = findAvailableStylistForSlot(payload, settings, entries, bookings);
+        if (!assignedStylist) {
+          return jsonResponse(409, {
+            error: "No stylist is available for this slot. Please choose another time.",
+            code: "slot_unavailable"
+          });
+        }
+        payload.stylist = assignedStylist;
       }
 
       const availability = buildSlots(payload.date, settings, entries, bookings, payload.stylist, payload.service);

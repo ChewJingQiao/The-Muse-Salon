@@ -1006,7 +1006,7 @@ settingsForm?.addEventListener("submit", async (event) => {
   }
 
   await loadAdminData();
-  showAdminAlert("Booking settings saved.");
+  showAdminAlert("Setup saved.");
 });
 
 exportButtons.forEach((button) => {

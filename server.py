@@ -261,6 +261,14 @@ def manual_block_applies_to_stylist(entry, stylist):
     return entry_stylist == requested_stylist
 
 
+def actual_stylist_names(settings):
+    return [
+        str(item.get("name", "")).strip()
+        for item in settings.get("stylists", [])
+        if str(item.get("name", "")).strip()
+    ]
+
+
 def booking_blocks_slot(booking, date, time, stylist, settings, service=None, duration_override_minutes=None, exclude_booking_id=None):
     booking_id = booking.get("bookingId") or booking.get("id")
     if exclude_booking_id and booking_id == exclude_booking_id:
@@ -469,6 +477,19 @@ def export_payload(export_type):
     raise ValueError("Export type must be all, bookings, blocks, or settings.")
 
 
+def public_settings_payload():
+    settings = read_settings()
+    return {
+        "services": settings.get("services", DEFAULT_SERVICES),
+        "serviceDurations": settings.get("serviceDurations", DEFAULT_SERVICE_DURATIONS),
+        "stylists": settings.get("stylists", DEFAULT_STYLISTS),
+        "slotDurationMinutes": int(settings.get("slotDurationMinutes", 30)),
+        "holdMinutes": int(settings.get("holdMinutes", HOLD_MINUTES)),
+        "bookingWindowDays": MAX_ADVANCE_BOOKING_DAYS,
+        "maxBookingDate": max_booking_date().isoformat(),
+    }
+
+
 def validate_entry_payload(payload):
     date = (payload.get("date") or "").strip()
     status = (payload.get("status") or "").strip().lower()
@@ -666,6 +687,56 @@ def minutes_to_label(value):
     return label.lstrip("0")
 
 
+def aggregate_any_stylist_availability(date_str, service=None, duration_override_minutes=None, exclude_booking_id=None):
+    settings = read_settings()
+    stylist_names = actual_stylist_names(settings)
+    service_duration = get_service_duration(settings, service, duration_override_minutes)
+    if not stylist_names:
+        return {
+            "date": date_str,
+            "stylist": ANY_STYLIST,
+            "service": service or "",
+            "serviceDurationMinutes": service_duration,
+            "closed": True,
+            "reason": "No stylists are configured.",
+            "autoAssign": True,
+            "slots": []
+        }
+
+    results = [
+        generate_slots_for_date(date_str, stylist, service, duration_override_minutes, exclude_booking_id)
+        for stylist in stylist_names
+    ]
+    slots_by_value = {}
+    for result in results:
+        for slot in result.get("slots", []):
+            slots_by_value.setdefault(slot["value"], slot)
+
+    slots = sorted(slots_by_value.values(), key=lambda item: item["value"])
+    reason = "" if slots else next((item.get("reason") for item in results if item.get("reason")), "No stylists are available on this date.")
+    return {
+        "date": date_str,
+        "stylist": ANY_STYLIST,
+        "service": service or "",
+        "serviceDurationMinutes": service_duration,
+        "closed": not bool(slots) and all(item.get("closed") for item in results),
+        "reason": reason,
+        "autoAssign": True,
+        "bookingWindowDays": MAX_ADVANCE_BOOKING_DAYS,
+        "maxBookingDate": max_booking_date().isoformat(),
+        "slots": slots
+    }
+
+
+def find_available_stylist_for_slot(payload):
+    settings = read_settings()
+    for stylist in actual_stylist_names(settings):
+        availability = generate_slots_for_date(payload["date"], stylist, payload["service"])
+        if any(slot["value"] == payload["time"] for slot in availability.get("slots", [])):
+            return stylist
+    return None
+
+
 def generate_slots_for_date(date_str, stylist=ANY_STYLIST, service=None, duration_override_minutes=None, exclude_booking_id=None):
     settings = read_settings()
     _, entries = read_availability_entries()
@@ -697,6 +768,8 @@ def generate_slots_for_date(date_str, stylist=ANY_STYLIST, service=None, duratio
             "maxBookingDate": max_booking_date().isoformat(),
             "slots": []
         }
+    if (stylist or ANY_STYLIST) == ANY_STYLIST:
+        return aggregate_any_stylist_availability(date_str, service, duration_override_minutes, exclude_booking_id)
     weekday = date_obj.strftime("%A").lower()
     hours = settings["weeklyHours"].get(weekday)
     slot_duration = int(settings.get("slotDurationMinutes", 30))
@@ -819,6 +892,8 @@ class KyaSalonHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path
 
+        if path == "/api/settings":
+            return self.write_json(public_settings_payload())
         if path == "/api/availability":
             return self.handle_availability_api(parsed.query)
         if path == "/api/admin/status":
@@ -994,6 +1069,18 @@ class KyaSalonHandler(BaseHTTPRequestHandler):
             payload = validate_booking_payload(self.read_json_body())
         except ValueError as exc:
             return self.write_json({"error": str(exc), "code": "invalid_booking"}, status=400)
+
+        if payload["stylist"] == ANY_STYLIST:
+            assigned_stylist = find_available_stylist_for_slot(payload)
+            if not assigned_stylist:
+                return self.write_json(
+                    {
+                        "error": "No stylist is available for this slot. Please choose another time.",
+                        "code": "slot_unavailable",
+                    },
+                    status=409,
+                )
+            payload["stylist"] = assigned_stylist
 
         try:
             availability = generate_slots_for_date(payload["date"], payload["stylist"], payload["service"])

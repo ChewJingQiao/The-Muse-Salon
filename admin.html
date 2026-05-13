@@ -31,8 +31,8 @@
         <section class="page-hero admin-hero">
           <div class="container">
             <p class="eyebrow">Private Admin</p>
-            <h1>Manage bookings and blocked times.</h1>
-            <p class="lead">Confirm WhatsApp bookings, cancel or expire holds, and keep manual blocked slots in one private panel.</p>
+            <h1>Manage the salon desk.</h1>
+            <p class="lead">Bookings, blocked times, setup and backups in one place.</p>
           </div>
         </section>
 
@@ -41,7 +41,7 @@
             <aside class="contact-card admin-login-card" data-admin-login-card>
               <p class="eyebrow">Sign In</p>
               <h2>Admin Panel</h2>
-              <p class="muted admin-login-intro">Sign in to manage bookings, confirmed appointments, and blocked salon times.</p>
+              <p class="muted admin-login-intro">Sign in to manage the salon schedule.</p>
               <form class="admin-login-form" data-admin-login-form>
                 <div class="field">
                   <label for="admin-password">Password</label>
@@ -55,8 +55,8 @@
             <section class="contact-card admin-dashboard" data-admin-dashboard hidden>
               <div class="admin-panel-head">
                 <div>
-                  <p class="eyebrow">Booking Desk</p>
-                  <h2>Appointment controls</h2>
+                  <p class="eyebrow">Salon Desk</p>
+                  <h2>Admin controls</h2>
                 </div>
                 <button class="button outline-dark" type="button" data-admin-refresh>Refresh Data</button>
               </div>
@@ -69,8 +69,8 @@
 
               <div class="admin-tabs" role="tablist" aria-label="Admin sections">
                 <button class="admin-tab is-active" type="button" role="tab" aria-selected="true" data-admin-tab-button="bookings">Bookings</button>
-                <button class="admin-tab" type="button" role="tab" aria-selected="false" data-admin-tab-button="blocking">Blocking</button>
-                <button class="admin-tab" type="button" role="tab" aria-selected="false" data-admin-tab-button="settings">Settings</button>
+                <button class="admin-tab" type="button" role="tab" aria-selected="false" data-admin-tab-button="blocking">Block Time</button>
+                <button class="admin-tab" type="button" role="tab" aria-selected="false" data-admin-tab-button="settings">Setup</button>
                 <button class="admin-tab" type="button" role="tab" aria-selected="false" data-admin-tab-button="backup">Backup</button>
               </div>
 
@@ -78,11 +78,11 @@
                 <div class="admin-summary-grid" data-admin-summary></div>
 
                 <details class="admin-card admin-info-card">
-                  <summary>Service duration defaults</summary>
+                  <summary>Service durations</summary>
                   <div class="admin-info-grid">
                     <div><h3>Cut & Styling</h3><p class="muted">Haircut & Styling: 60 min<br>Wash & Blow: 45 min</p></div>
                     <div><h3>Colour & Texture</h3><p class="muted">Hair Coloring: 150 min<br>Rebonding / Smoothing: 180 min<br>Perm: 150 min</p></div>
-                    <div><h3>Treatment & Care</h3><p class="muted">Hair Treatment: 90 min<br>Scalp Care: 60 min</p><p class="muted">Staff can override the duration inside each booking before confirming when a client needs more or less time.</p></div>
+                    <div><h3>Treatment & Care</h3><p class="muted">Hair Treatment: 90 min<br>Scalp Care: 60 min</p><p class="muted">Staff can adjust duration inside a booking.</p></div>
                   </div>
                 </details>
 
@@ -90,9 +90,9 @@
                   <div class="admin-section-title">
                     <div>
                       <p class="eyebrow">Customer Bookings</p>
-                      <h3>Bookings by date</h3>
+                      <h3>Bookings</h3>
                     </div>
-                    <p class="muted">Pending slots are held for 10 minutes. Confirmed bookings permanently block the stylist and time slot.</p>
+                    <p class="muted">Pending holds expire after 10 minutes. Confirmed bookings block the slot.</p>
                   </div>
                   <div class="admin-filter-bar">
                     <div class="field">
@@ -125,8 +125,8 @@
                 <div class="admin-card">
                   <div class="admin-section-title">
                     <div>
-                      <p class="eyebrow">Blocked by Bookings</p>
-                      <h3>Confirmed appointment slots</h3>
+                      <p class="eyebrow">Confirmed Slots</p>
+                      <h3>Blocked by bookings</h3>
                     </div>
                   </div>
                   <div class="confirmed-blocks" data-admin-confirmed-blocks></div>
@@ -136,8 +136,8 @@
               <section class="admin-tab-panel" data-admin-panel="blocking" hidden>
                 <div class="admin-grid">
                   <div class="admin-card">
-                    <p class="eyebrow">Manual Blocking</p>
-                    <h3>Add or edit a block</h3>
+                    <p class="eyebrow">Block Time</p>
+                    <h3>Add blocked time</h3>
                     <form class="admin-block-form" data-admin-block-form>
                       <input type="hidden" data-entry-row-index>
                       <div class="field">
@@ -178,14 +178,14 @@
                   </div>
 
                   <div class="admin-card">
-                    <h3>Current opening hours</h3>
+                    <h3>Opening hours</h3>
                     <div class="admin-hours" data-admin-hours></div>
-                    <p class="muted">Choose “All stylists” for salon-wide blocks, or select one stylist for personal leave and private holds.</p>
+                    <p class="muted">Block all stylists or one stylist only.</p>
                   </div>
                 </div>
 
                 <div class="admin-card">
-                  <h3>Current blocked entries</h3>
+                  <h3>Blocked times</h3>
                   <div class="admin-table-wrap">
                     <table class="admin-table">
                       <thead>
@@ -197,8 +197,8 @@
                 </div>
 
                 <details class="admin-card admin-advanced">
-                  <summary>Advanced: CSV import/export view</summary>
-                  <p class="muted">This is optional. Daily operations should use the direct form above.</p>
+                  <summary>CSV tools</summary>
+                  <p class="muted">Optional tools for Excel-style editing.</p>
                   <div class="field">
                     <label for="csv-file">Upload CSV from Excel</label>
                     <input id="csv-file" type="file" accept=".csv" data-admin-file>
@@ -216,9 +216,9 @@
                   <div class="admin-section-title">
                     <div>
                       <p class="eyebrow">Salon Setup</p>
-                      <h3>Booking settings</h3>
+                      <h3>Salon setup</h3>
                     </div>
-                    <p class="muted">Update service names, stylists, durations, opening hours, and booking hold rules.</p>
+                    <p class="muted">Services, stylists, durations and opening hours.</p>
                   </div>
                   <div class="admin-settings-grid">
                     <div class="field">
@@ -255,9 +255,9 @@
                   <div class="admin-section-title">
                     <div>
                       <p class="eyebrow">Data Backup</p>
-                      <h3>Export admin data</h3>
+                      <h3>Export data</h3>
                     </div>
-                    <p class="muted">Download a backup before major edits, busy seasons, or handover to the salon team.</p>
+                    <p class="muted">Download a backup before major edits or handover.</p>
                   </div>
                   <div class="admin-export-grid">
                     <button class="button dark" type="button" data-admin-export="all">Export Everything</button>
@@ -265,7 +265,7 @@
                     <button class="button outline-dark" type="button" data-admin-export="blocks">Export Blocked Times</button>
                     <button class="button outline-dark" type="button" data-admin-export="settings">Export Settings</button>
                   </div>
-                  <p class="muted">Exports use the current stored data after automatic cleanup has run.</p>
+                  <p class="muted">Exports include the current stored data.</p>
                 </div>
               </section>
             </section>
